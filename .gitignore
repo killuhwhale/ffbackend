@@ -1,0 +1,8 @@
+bin/
+gyms/__pycache__/
+gyms/create_workout_names.py
+gyms/migrations/
+instafitAPI/.env
+instafitAPI/__pycache__/
+users/__pycache__/
+users/migrations/

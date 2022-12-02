@@ -26,9 +26,11 @@ class UserManager(BaseUserManager):
         # When use confirms email, change their account to active, is_active: True
         print("_create_user extra fields", extra_fields)
         extra_fields['is_active'] = True
-
-        del extra_fields['groups']
-        del extra_fields['user_permissions']
+        if "groups" in extra_fields:
+            del extra_fields['groups']
+        if "user_permissions" in extra_fields:
+            del extra_fields['user_permissions']
+        
         user = self.model(email=email, **extra_fields)
 
         user.set_password(password)

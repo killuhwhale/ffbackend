@@ -9,26 +9,33 @@ https://docs.djangoproject.com/en/4.0/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.0/ref/settings/
 """
+
+from django.core.management.utils import get_random_secret_key
+import os
+import sys
 import environ
 from datetime import timedelta
 from pathlib import Path
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
-BASE_DIR = Path(__file__).resolve().parent.parent
 env = environ.Env()
 environ.Env.read_env()
+
+DEVELOPMENT_MODE = os.getenv("DEVELOPMENT_MODE", "False") == "True"
+DEBUG = os.getenv("DEBUG", "False") == "True" or env('DEBUG') == "TRUE"
+
+# Build paths inside the project like this: BASE_DIR / 'subdir'.
+BASE_DIR = Path(__file__).resolve().parent.parent
+
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-74!cin1dc)k9(a7pw&6i_kes3pko_3-ohm$67dbdjpverfv0u('
+SECRET_KEY = env('SECRET_KEY') if DEBUG is True else os.getenv("DJANGO_SECRET_KEY", get_random_secret_key())
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
-
-ALLOWED_HOSTS = ["10.0.2.2", 'localhost', '127.0.0.1', '192.168.0.159']
-
+# ALLOWED_HOSTS = ["10.0.2.2", 'localhost', '127.0.0.1', '192.168.0.159']
+ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "127.0.0.1,localhost").split(",")
+ 
 
 # https://django-rest-framework-simplejwt.readthedocs.io/en/latest/settings.html#settings
 SIMPLE_JWT = {
@@ -146,17 +153,35 @@ WSGI_APPLICATION = 'instafitAPI.wsgi.application'
     ./manage.py migrate
 '''
 
-DATABASES = {
-    'default': {
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.postgresql_psycopg2',
+#         'NAME': env('DEV_DB_NAME'),
+#         'USER': env('DEV_DB_USER'),
+#         'PASSWORD':  env('DEV_DB_PASS'),
+#         'HOST': '127.0.0.1',
+#         'PORT': '5432',
+#     }
+# }
+
+
+if DEVELOPMENT_MODE is True or DEBUG is True:
+    DATABASES = {
+        "default":  {
         'ENGINE': 'django.db.backends.postgresql_psycopg2',
-        'NAME': 'instafit_master',
-        'USER': 'gym_admin',
-        'PASSWORD': 'mostdope',
+        'NAME': env('DEV_DB_NAME'),
+        'USER': env('DEV_DB_USER'),
+        'PASSWORD':  env('DEV_DB_PASS'),
         'HOST': '127.0.0.1',
         'PORT': '5432',
     }
-}
-
+    }
+elif len(sys.argv) == 0 or (len(sys.argv) > 1 and sys.argv[1] != 'collectstatic'):
+    if os.getenv("DATABASE_URL", None) is None:
+        raise Exception("DATABASE_URL environment variable not defined")
+    DATABASES = {
+        "default": dj_database_url.parse(os.environ.get("DATABASE_URL")),
+    }
 
 # Password validation
 # https://docs.djangoproject.com/en/4.0/ref/settings/#auth-password-validators
@@ -223,9 +248,10 @@ AWS_DEFAULT_ACL = 'public-read'
 
 STATICFILES_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
 
-STATIC_URL = '{}/{}/'.format(AWS_S3_ENDPOINT_URL, AWS_LOCATION)
-STATIC_ROOT = 'static/'
+# STATIC_URL = '{}/{}/'.format(AWS_S3_ENDPOINT_URL, AWS_LOCATION)
+
 STATIC_URL = 'static/'
+STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.0/ref/settings/#default-auto-field

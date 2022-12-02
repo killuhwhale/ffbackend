@@ -9,6 +9,13 @@ hon begi
 
 
 
+Git
+Update staging from main
+*main
+git merge origin/staging
+git branch -M staging
+git push origin HEAD
+
 
 Reset DB:
 

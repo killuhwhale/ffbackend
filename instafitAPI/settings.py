@@ -16,6 +16,7 @@ import sys
 import environ
 from datetime import timedelta
 from pathlib import Path
+import dj_database_url
 
 env = environ.Env(
     # set casting, default value

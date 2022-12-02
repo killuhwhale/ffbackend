@@ -20,10 +20,11 @@ class UserManager(BaseUserManager):
         # Prevents an issue with:
         # TypeError: Direct assignment to the forward side of a many-to-many set is prohibited. Use groups.set() instead.
         # However, we most likely wont need to add perms or groups at time of creation.
-        groups = extra_fields['groups']
-        perms = extra_fields['user_permissions']
+        # groups = extra_fields['groups']
+        # perms = extra_fields['user_permissions']
         # TODO Change to false and have an email verification process
         # When use confirms email, change their account to active, is_active: True
+        print("_create_user extra fields", extra_fields)
         extra_fields['is_active'] = True
 
         del extra_fields['groups']

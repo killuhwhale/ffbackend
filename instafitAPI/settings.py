@@ -179,8 +179,9 @@ WSGI_APPLICATION = 'instafitAPI.wsgi.application'
 #     }
 # }
 
+print("env", os.getenv("USER"))
 
-if DEVELOPMENT_MODE is True or DEBUG is True:
+if os.getenv("USER") == "killuh":
     DATABASES = {
         "default":  {
         'ENGINE': 'django.db.backends.postgresql_psycopg2',

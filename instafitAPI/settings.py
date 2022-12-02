@@ -17,11 +17,26 @@ import environ
 from datetime import timedelta
 from pathlib import Path
 
-env = environ.Env()
+env = environ.Env(
+    # set casting, default value
+    DEBUG=(bool, False),
+    SPACES_ENDPOINT_FULL=(str, ""),
+    SPACES_ENDPOINT_EDGE=(str,""),
+    SPACES_KEY=(str,""),
+    SPACES_SECRET=(str,""),
+    BUCKET=(str,""),
+    SENDGRID_API_KEY=(str,""),
+    SENDGRIPD_FROM_EMAIL=(str,""),
+    SECRET_KEY=(str,""),
+    DEV_DB_NAME=(str,""),
+    DEV_DB_USER=(str,""),
+    DEV_DB_PASS=(str,""),
+)
+
 environ.Env.read_env()
 
 DEVELOPMENT_MODE = os.getenv("DEVELOPMENT_MODE", "False") == "True"
-DEBUG = os.getenv("DEBUG", "False") == "True" or env('DEBUG') == "TRUE"
+DEBUG = os.getenv("DEBUG", "False") == "True" or env('DEBUG') == "True"
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent

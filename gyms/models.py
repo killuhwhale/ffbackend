@@ -117,6 +117,7 @@ class WorkoutItems(models.Model):
     name = models.ForeignKey(
         WorkoutNames, on_delete=models.CASCADE)                # Squat
     ssid = models.IntegerField(default=-1, blank=True)
+    constant = models.BooleanField(default=False, blank=True) # For Reps based workout, quantity is constant
 
     # removed:   intensity, rounds
     sets = models.IntegerField(default=0)                      # 3

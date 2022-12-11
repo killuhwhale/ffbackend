@@ -62,7 +62,7 @@ SIMPLE_JWT = {
     'UPDATE_LAST_LOGIN': False,
 
     'ALGORITHM': 'HS256',
-    'SIGNING_KEY': SECRET_KEY,
+    'SIGNING_KEY': env('JWT_SIGNING_KEY') if os.getenv("USER") == "killuh" else os.getenv("JWT_SIGNING_KEY", ""),
     'VERIFYING_KEY': None,
     'AUDIENCE': None,
     'ISSUER': None,
@@ -180,7 +180,7 @@ WSGI_APPLICATION = 'instafitAPI.wsgi.application'
 #     }
 # }
 
-print("env", os.getenv("USER"))
+
 
 if os.getenv("USER") == "killuh":
     DATABASES = {

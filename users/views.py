@@ -134,6 +134,7 @@ class ResetPasswordEmailViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['POST'], permission_classes=[])
     def reset_password_with_old(self, request, pk=None):
         email = request.user.email
+        print("reset_password_with_old", request.data)
         password = request.data.get("password")
         new_password = request.data.get("new_password")
         password_confirm = request.data.get("password_confirm")

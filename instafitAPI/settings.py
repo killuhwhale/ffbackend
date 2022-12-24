@@ -51,6 +51,8 @@ SECRET_KEY = get_random_secret_key()
 
 # ALLOWED_HOSTS = ["10.0.2.2", 'localhost', '127.0.0.1', '192.168.0.159']
 ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "127.0.0.1,localhost").split(",")
+
+FILE_UPLOAD_MAX_MEMORY_SIZE = 5242880
  
 
 # https://django-rest-framework-simplejwt.readthedocs.io/en/latest/settings.html#settings
@@ -85,7 +87,6 @@ SIMPLE_JWT = {
     'SLIDING_TOKEN_LIFETIME': timedelta(minutes=5),
     'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=1),
 }
-
 
 # Application definition
 

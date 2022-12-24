@@ -51,6 +51,13 @@ Required Features:
 
 
 
+TODO
+- Add error for image size erros
+    - Curerntly limited to 5MB
+    - Error is:
+        - error cannot pickle '_io.BufferedRandom' object
+
+
 Apple watch integrations?
 
 Names

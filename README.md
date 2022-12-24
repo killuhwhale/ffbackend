@@ -7,7 +7,7 @@ sudo -u postgres psql -U gym_admin -d instafit_master -h 127.0.0.1
 AttributeError: Manager isn't available; 'auth.User' has been swapped for 'users.User'
 hon begi
 
-
+echo "515.86.01-0ubuntu0.20.04.1 hold" | sudo dpkg --set-selections
 
 Git
 Update staging from main

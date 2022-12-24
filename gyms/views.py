@@ -159,7 +159,7 @@ class GymClassPermission(BasePermission):
 
 
 class WorkoutPermission(BasePermission):
-    message = """Only users can create workouts for themselves or
+    message = """Only users can create/delete workouts for themselves or
                 for a class they own or are a coach of."""
 
     def has_permission(self, request, view):
@@ -201,7 +201,7 @@ class WorkoutPermission(BasePermission):
 
 
 class WorkoutGroupsPermission(BasePermission):
-    message = """Only users can create workouts for themselves or
+    message = """Only users can create/delete workouts for themselves or
                 for a class they own or are a coach of."""
 
     def has_permission(self, request, view):
@@ -391,8 +391,8 @@ class GymViewSet(DestroyWithPayloadMixin, viewsets.ModelViewSet, GymPermission):
 
             return Response(GymSerializer(gym).data)
         except Exception as e:
-            print(e)
-            return Response(to_err("Failed to create workout"))
+            print("Failed to create Gym ", e)
+            return Response(to_err(f"Failed to create Gym: {e}"))
 
     @action(detail=True, methods=['get'], permission_classes=[])
     def user_favorites(self, request, pk=None):

@@ -22,16 +22,16 @@ env = environ.Env(
     # set casting, default value
     DEBUG=(bool, False),
     SPACES_ENDPOINT_FULL=(str, ""),
-    SPACES_ENDPOINT_EDGE=(str,""),
-    SPACES_KEY=(str,""),
-    SPACES_SECRET=(str,""),
-    BUCKET=(str,""),
-    SENDGRID_API_KEY=(str,""),
-    SENDGRIPD_FROM_EMAIL=(str,""),
-    SECRET_KEY=(str,""),
-    DEV_DB_NAME=(str,""),
-    DEV_DB_USER=(str,""),
-    DEV_DB_PASS=(str,""),
+    SPACES_ENDPOINT_EDGE=(str, ""),
+    SPACES_KEY=(str, ""),
+    SPACES_SECRET=(str, ""),
+    BUCKET=(str, ""),
+    SENDGRID_API_KEY=(str, ""),
+    SENDGRIPD_FROM_EMAIL=(str, ""),
+    SECRET_KEY=(str, ""),
+    DEV_DB_NAME=(str, ""),
+    DEV_DB_USER=(str, ""),
+    DEV_DB_PASS=(str, ""),
 )
 
 environ.Env.read_env()
@@ -50,10 +50,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = get_random_secret_key()
 
 # ALLOWED_HOSTS = ["10.0.2.2", 'localhost', '127.0.0.1', '192.168.0.159']
-ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "127.0.0.1,localhost").split(",")
+ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS",
+                          "127.0.0.1,localhost").split(",")
 
 FILE_UPLOAD_MAX_MEMORY_SIZE = 5242880 * 2
- 
+
 
 # https://django-rest-framework-simplejwt.readthedocs.io/en/latest/settings.html#settings
 SIMPLE_JWT = {
@@ -182,17 +183,16 @@ WSGI_APPLICATION = 'instafitAPI.wsgi.application'
 # }
 
 
-
-if os.getenv("USER") == "killuh":
+if os.getenv("USER") == "killuh" or os.getenv("USER") == "chrisandaya":
     DATABASES = {
         "default":  {
-        'ENGINE': 'django.db.backends.postgresql_psycopg2',
-        'NAME': env('DEV_DB_NAME'),
-        'USER': env('DEV_DB_USER'),
-        'PASSWORD':  env('DEV_DB_PASS'),
-        'HOST': '127.0.0.1',
-        'PORT': '5432',
-    }
+            'ENGINE': 'django.db.backends.postgresql_psycopg2',
+            'NAME': env('DEV_DB_NAME'),
+            'USER': env('DEV_DB_USER'),
+            'PASSWORD':  env('DEV_DB_PASS'),
+            'HOST': '127.0.0.1',
+            'PORT': '5432',
+        }
     }
 elif len(sys.argv) == 0 or (len(sys.argv) > 1 and sys.argv[1] != 'collectstatic'):
     if os.getenv("DATABASE_URL", None) is None:

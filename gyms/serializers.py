@@ -1,4 +1,6 @@
 from importlib.metadata import requires
+from django.core.serializers import serialize
+from itertools import chain
 from rest_framework import serializers
 from gyms.models import (
     BodyMeasurements, CompletedWorkoutGroups, CompletedWorkoutItems, CompletedWorkouts, GymClassFavorites, ClassMembers, Coaches,
@@ -117,6 +119,10 @@ class CompletedWorkoutGroupsNoWorkoutsSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
+# Create a stats class serializer to return a list of WOrkout Groups for
+#  Completed WOrkouts and Workouts Groups By User/Not by Class that
+
+
 ########################################################
 #   ////////////////////////////////////////////////   #
 ########################################################
@@ -167,7 +173,8 @@ class WorkoutGroupsSerializer(serializers.ModelSerializer):
     completed = serializers.SerializerMethodField('has_completed')
 
     def has_completed(self, workout_group):
-        print("Has completed: ", workout_group.id,  self.context)
+        print("Has completed: (WorkoutGroupsSerializer)",
+              workout_group,  self.context)
 
         return CompletedWorkoutGroups.objects.filter(
             workout_group_id=workout_group.id,
@@ -221,6 +228,33 @@ class CombinedWorkoutGroupsSerializer(serializers.Serializer):
     created_workout_groups = WorkoutGroupsSerializer(many=True, required=False)
     completed_workout_groups = CompletedWorkoutGroupsSerializer(
         many=True, required=False)
+
+
+class CombinedWorkoutsSerializer(serializers.Serializer):
+    '''
+        Goal is to return a single list of data w/ the keys:
+        scheme_rounds,
+        scheme_type,
+
+        Front end will handle which items are there.
+        workout_items -- OR --
+        completed_workout_items
+    '''
+
+
+class CombinedWorkoutGroupsAsWorkoutGroupsSerializer(serializers.Serializer):
+    '''
+        Used to serialized all workouts for a user between their own created 
+            and Completed workouts.
+    '''
+    workout_groups = serializers.SerializerMethodField()
+
+    def get_workout_groups(self, instance):
+        print("Instance: ", instance)
+        print("Context: ", self.context)
+        wgs = instance['created_workout_groups'].order_by('for_date')
+        cwgs = instance['completed_workout_groups'].order_by('for_date')
+        return serialize('json', list(chain(wgs, cwgs)))
 
 
 class CombinedWorkoutGroupsSerializerNoWorkouts(serializers.Serializer):

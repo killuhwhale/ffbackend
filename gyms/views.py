@@ -1,5 +1,7 @@
 from datetime import datetime
 import environ
+from django.core.serializers import serialize
+from itertools import chain
 import json
 from typing import Dict, List
 from rest_framework import viewsets, status
@@ -8,7 +10,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import BasePermission, SAFE_METHODS
 from rest_framework.response import Response
 from gyms.serializers import (
-    CombinedWorkoutGroupsSerializer, CompletedWorkoutCreateSerializer, CompletedWorkoutGroupsSerializer,
+    CombinedWorkoutGroupsAsWorkoutGroupsSerializer, CombinedWorkoutGroupsSerializer, CompletedWorkoutCreateSerializer, CompletedWorkoutGroupsSerializer,
     CompletedWorkoutSerializer, GymClassSerializerWithWorkoutsCompleted, ProfileGymClassFavoritesSerializer, ProfileGymFavoritesSerializer, ProfileWorkoutGroupsSerializer, UserSerializer, UserWithoutEmailSerializer,
     WorkoutCategorySerializer, GymSerializerWithoutClasses,
     BodyMeasurementsSerializer, Gym_ClassSerializer, GymSerializer, GymClassCreateSerializer,
@@ -664,7 +666,7 @@ class WorkoutGroupsViewSet(viewsets.ModelViewSet, WorkoutGroupsPermission):
                 return Response(to_err("Workout already created. Must delete and reupload w/ media or edit workout.", ))
         except Exception as e:
             print("Error creating workout group:", e)
-            return Response(to_err("Error creating workout group:" ))
+            return Response(to_err("Error creating workout group:"))
 
         try:
             parent_id = workout_group.id
@@ -832,7 +834,6 @@ class WorkoutGroupsViewSet(viewsets.ModelViewSet, WorkoutGroupsPermission):
             workout_group.date_archived = datetime.now()
             workout_group.save()
             return Response(to_data("Finished workout requested to delete, archived instead."))
-            
 
         print("workout group is not finished, deleting.")
         workout_group.delete()
@@ -941,7 +942,7 @@ class CompletedWorkoutGroupsViewSet(DestroyWithPayloadMixin, viewsets.ModelViewS
             1. CreateCWG
             2. Upload Media
             3. Create Cwrokouts w/ their CompleteItems
-            
+
             if step 2 fails, media is not uploaded successfully,
                 - delete CWG and return
         '''
@@ -958,7 +959,7 @@ class CompletedWorkoutGroupsViewSet(DestroyWithPayloadMixin, viewsets.ModelViewS
             del data['workouts']
         if 'workout_group' in data:
             del data['workout_group']
-        
+
         try:
             workout_group = WorkoutGroups.objects.get(id=workout_group_id)
             if not workout_group.finished:
@@ -966,33 +967,35 @@ class CompletedWorkoutGroupsViewSet(DestroyWithPayloadMixin, viewsets.ModelViewS
 
             comp_workout_group, newly_created = CompletedWorkoutGroups.objects.get_or_create(
                 **{**data, 'caption': caption, 'media_ids': [], 'workout_group_id': workout_group_id, 'user_id': request.user.id})
-            if not newly_created:    
+            if not newly_created:
                 return Response(to_err("Workout already create. Must delete and reupload w/ media or edit workout."))
 
         except Exception as e:
             print("Error creating CompletedWorkoutGroup:", e)
             if comp_workout_group:
                 comp_workout_group.delete()
-        
+
         uploaded_names = []
         try:
             parent_id = comp_workout_group.id
             print("Uploading files for completedWorkoutGroup: ", files, "\n")
             uploaded_names = upload_media(
                 files, parent_id, FILES_KINDS[COMP_WORKOUT_FILES])
-            
+
             # If given files to do match uploaded files, consider bad upload, delete created stuff and return error
             # if len(files) != len(uploaded_names):
             #     comp_workout_group.delete() #
-            #     delete_media(parent_id, uploaded_names, FILES_KINDS[COMP_WORKOUT_FILES]) # undo step two 
+            #     delete_media(parent_id, uploaded_names, FILES_KINDS[COMP_WORKOUT_FILES]) # undo step two
             #     return Response(to_err("Failed to upload media files."))
 
-            comp_workout_group.media_ids = json.dumps([n for n in uploaded_names])
+            comp_workout_group.media_ids = json.dumps(
+                [n for n in uploaded_names])
             comp_workout_group.save()
 
         except Exception as e:
-            comp_workout_group.delete() # undo step one
-            delete_media(parent_id, uploaded_names, FILES_KINDS[COMP_WORKOUT_FILES]) # undo step two 
+            comp_workout_group.delete()  # undo step one
+            delete_media(parent_id, uploaded_names,
+                         FILES_KINDS[COMP_WORKOUT_FILES])  # undo step two
             print("Error uploading media:", e)
             return Response(to_err("Error uploading media"))
 
@@ -1039,14 +1042,14 @@ class CompletedWorkoutGroupsViewSet(DestroyWithPayloadMixin, viewsets.ModelViewS
             CompletedWorkoutItems.objects.bulk_create(allItems)
 
         except Exception as e:
-            comp_workout_group.delete() # undo step one, should delete all foregin keys
-            delete_media(parent_id, uploaded_names, FILES_KINDS[COMP_WORKOUT_FILES]) # undo step two 
+            comp_workout_group.delete()  # undo step one, should delete all foregin keys
+            delete_media(parent_id, uploaded_names,
+                         FILES_KINDS[COMP_WORKOUT_FILES])  # undo step two
             msg = f"Error creating CompleteWorkoutItems {e}"
             print(msg, e)
             return Response(to_err(msg))
 
         return Response(CompletedWorkoutGroupsSerializer(comp_workout_group).data)
-        
 
     def last_id_from_media(self, cur_media_ids: List[str]) -> int:
         last_id = 0
@@ -1444,7 +1447,8 @@ class ProfileViewSet(viewsets.ViewSet):
 
         wgs = WorkoutGroups.objects.filter(
             owner_id=user_id, owned_by_class=False).order_by('for_date')
-        cwgs = CompletedWorkoutGroups.objects.filter(user_id=user_id).order_by('for_date')
+        cwgs = CompletedWorkoutGroups.objects.filter(
+            user_id=user_id).order_by('for_date')
         data['created_workout_groups'] = wgs
         data['completed_workout_groups'] = cwgs
         workouts['workout_groups'] = data
@@ -1464,12 +1468,54 @@ class StatsViewSet(viewsets.ViewSet):
         start_date = request.query_params.get('start_date')
         end_date = request.query_params.get('end_date')
         print(request.query_params, user_id, start_date, end_date)
+        workouts = dict()
+        data = dict()
+
+        wgs = WorkoutGroups.objects.filter(
+            owned_by_class=False,
+            owner_id=user_id,
+            for_date__gte=start_date,
+            for_date__lte=end_date)
+        cwgs = CompletedWorkoutGroups.objects.filter(
+            user_id=user_id,
+            for_date__gte=start_date,
+            for_date__lte=end_date,
+        )
+
+        print("Perosnal workouts stats: ", wgs)
+        data['created_workout_groups'] = wgs
+        data['completed_workout_groups'] = cwgs
+
         return Response(
-            CompletedWorkoutGroupsSerializer(
-                CompletedWorkoutGroups.objects.filter(
-                    user_id=user_id,
-                    for_date__gte=start_date,
-                    for_date__lte=end_date,
-                ), many=True
+
+            list(chain(
+                WorkoutGroupsSerializer(
+                    wgs,
+                    context={'request': request, },
+                    many=True
+                ).data,
+                CompletedWorkoutGroupsSerializer(
+                    cwgs,
+                    context={'request': request, },
+                    many=True
+                ).data
+            ))
+
+        )
+
+        return Response(
+            CombinedWorkoutGroupsAsWorkoutGroupsSerializer(
+                data,
+                context={'request': request, }
             ).data
         )
+
+        # return Response(
+        #     CompletedWorkoutGroupsSerializer(
+        #         CompletedWorkoutGroups.objects.filter(
+        #             user_id=user_id,
+        #             for_date__gte=start_date,
+        #             for_date__lte=end_date,
+        #         ), many=True
+        #     ).data
+        # )

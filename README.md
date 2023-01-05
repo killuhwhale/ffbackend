@@ -9,6 +9,10 @@ hon begi
 
 echo "515.86.01-0ubuntu0.20.04.1 hold" | sudo dpkg --set-selections
 
+
+./manage.py shell < myscript.py
+
+
 Git
 Update staging from main
 *main
@@ -34,7 +38,7 @@ DO $$ DECLARE
 
 
 Required Features:
-    √ iOs and Android 
+    √ iOs and Android
     API work
         √ Intensity and rest per exercise
             - Recording add fields to workou
@@ -62,5 +66,5 @@ Apple watch integrations?
 
 Names
 Fitness Platform
-    - Fitform 
+    - Fitform
 

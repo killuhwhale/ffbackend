@@ -1,8 +1,9 @@
-from datetime import datetime
+from datetime import datetime, time, timedelta
 import environ
 from django.core.serializers import serialize
 from itertools import chain
 import json
+import pytz
 from typing import Dict, List
 from rest_framework import viewsets, status
 from rest_framework.parsers import JSONParser, MultiPartParser, FormParser, FileUploadParser
@@ -32,7 +33,7 @@ from itertools import chain
 import sendgrid
 import os
 from sendgrid.helpers.mail import Email, To, TemplateId, Mail
-
+tz = pytz.timezone("US/Pacific")
 s3_client = s3Client()
 env = environ.Env()
 environ.Env.read_env()
@@ -1467,20 +1468,39 @@ class StatsViewSet(viewsets.ViewSet):
 
         start_date = request.query_params.get('start_date')
         end_date = request.query_params.get('end_date')
-        print(request.query_params, user_id, start_date, end_date)
         workouts = dict()
         data = dict()
+        start = tz.localize(datetime.combine(
+            datetime.strptime(
+                start_date,
+                "%Y-%m-%d"
+            ),
+            time.min
+        )).strftime("%Y-%m-%d %H:%M:%S%z").rstrip("0")
+        end = tz.localize(datetime.combine(
+            datetime.strptime(
+                end_date,
+                "%Y-%m-%d"
+            ),
+            time.max
+        )).strftime("%Y-%m-%d %H:%M:%S%z").rstrip("0")
+        # end = datetime.combine(datetime.strptime(end_date, "%Y-%m-%d"), time.max).strftime("%Y-%m-%d %H:%M:%S")
 
+        print('\n', request.query_params, user_id, start, end, '\n',)
         wgs = WorkoutGroups.objects.filter(
             owned_by_class=False,
             owner_id=user_id,
-            for_date__gte=start_date,
-            for_date__lte=end_date)
+            for_date__gte= start,
+            for_date__lte= end,
+        )
         cwgs = CompletedWorkoutGroups.objects.filter(
             user_id=user_id,
-            for_date__gte=start_date,
-            for_date__lte=end_date,
+            for_date__gte= start,
+            for_date__lte= end,
         )
+
+        for wg in wgs:
+            print(wg.for_date)
 
         print("Perosnal workouts stats: ", wgs)
         data['created_workout_groups'] = wgs

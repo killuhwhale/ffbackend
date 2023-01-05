@@ -120,17 +120,17 @@ class WorkoutItems(models.Model):
     constant = models.BooleanField(default=False, blank=True) # For Reps based workout, quantity is constant
     # removed:   intensity, rounds
     sets = models.IntegerField(default=0)                      # 3
-    reps = models.CharField(max_length=140, default="0")       # 5
-    duration = models.CharField(max_length=140, default="0")   # None
+    reps = models.CharField(max_length=140, default="[0]")       # 5
+    duration = models.CharField(max_length=140, default="[0]")   # None
     duration_unit = models.IntegerField(default=0)             # None
-    distance = models.CharField(max_length=140, default="0")
+    distance = models.CharField(max_length=140, default="[0]")
     distance_unit = models.IntegerField(default=0)
     weights = models.CharField(
         max_length=400, default="[]")   # [100, 155, 185]
     weight_unit = models.CharField(max_length=2, default='kg')  # None
     rest_duration = models.FloatField(default=0.0)                  # None
     rest_duration_unit = models.IntegerField(default=0)             # None
-    percent_of = models.CharField(max_length=20, default='1RM')  # None
+    percent_of = models.CharField(max_length=20, default='')  # None
     order = models.IntegerField()             # None
     date = models.DateTimeField(auto_now_add=True)
 
@@ -239,7 +239,7 @@ class ResetPasswords(models.Model):
 Workout Schemes:
     Round Scheme:
         - Rounds plus a series of workout items
-    
+
     Rep scheme:
         - Rounds of varying reps of workout items
 

@@ -1,9 +1,11 @@
 import environ
-import sendgrid
+import pyotp
 from datetime import datetime
 from django.contrib.auth import get_user_model
 from django.contrib.auth.hashers import check_password
 from django.contrib.auth.models import User, Group
+from django.db.utils import IntegrityError
+import pytz
 from rest_framework import viewsets
 from rest_framework import permissions
 from rest_framework.decorators import action
@@ -11,7 +13,8 @@ from rest_framework.response import Response
 from rest_framework.permissions import BasePermission, SAFE_METHODS
 from rest_framework_simplejwt.views import TokenObtainPairView
 from time import time
-from sendgrid.helpers.mail import Email, To, TemplateId, Mail
+import sib_api_v3_sdk
+from sib_api_v3_sdk.rest import ApiException
 from gyms.s3 import s3Client
 from gyms.views import FILES_KINDS
 from gyms.models import ResetPasswords
@@ -20,8 +23,11 @@ from users.serializers import (
     UserWithoutEmailSerializer, TokenObtainPairSerializer
 )
 env = environ.Env()
-
+tz = pytz.timezone("US/Pacific")
 s3_client = s3Client()
+
+configuration = sib_api_v3_sdk.Configuration()
+configuration.api_key['api-key'] = env('SENDINBLUE_KEY')
 
 
 # Deprecated since we dont send user info with requests. We have tokens...
@@ -88,48 +94,126 @@ class UserViewSet(viewsets.ModelViewSet):
 
 class ResetPasswordEmailViewSet(viewsets.ViewSet):
     '''
-     Returns workouts between a range of dates either for a user's workouts or a classes workouts.
+      Sends Email code to reset password.
     '''
+    minute = 60
+    CODE_VALID_TIME= 15 * minute
+
+    def _get_user(sel, email: str):
+        try:
+            return get_user_model().objects.get(email=email)
+        except Exception as e:
+            print("Error getting user or creating code.", e)
+            return None
+
+    def _check_expired_entry(self, email: str):
+        # 2. Check for all existing entries by email.
+        entries = ResetPasswords.objects.filter(email=email)
+        has_existing_code = False
+        # 3.For each entry,
+        now = tz.localize(datetime.now())
+
+
+        for entry in entries:
+            # Time for expiration is greater than now, its in future.
+            print("Date cmp", entry.expires_at,  now, entry.expires_at >= now)
+            if entry.expires_at >= now:
+                has_existing_code = True
+            else:
+                # Expired code, delete it.
+                entry.delete()
+            pass
+        return has_existing_code
+
+    def _send_email(self, user):
+        # 4. Now we if we are proceeding, we can generate a new coed and send it & store it
+        code = pyotp.TOTP(user.secret, interval=5).now()  # Just create a code
+        api_instance = sib_api_v3_sdk.TransactionalEmailsApi(
+            sib_api_v3_sdk.ApiClient(configuration))
+        send_smtp_email = sib_api_v3_sdk.SendSmtpEmail(
+            to=[sib_api_v3_sdk.SendSmtpEmailTo(email=user.email)],
+            template_id=1,
+            params={'reset_code': code},
+        )
+
+        new_entry = None
+
+        try:
+            new_entry = ResetPasswords.objects.create(
+                email=user.email,
+                code=code,
+                expires_at= tz.localize(datetime.fromtimestamp(int(time()) + (self.CODE_VALID_TIME)))
+            )
+        except IntegrityError as e:
+            print("Error user already exists.", e)
+            return {'error': 'Code already exsits.'}
+        except Exception as e:
+            print("Error getting user or creating code.", e)
+            return {'error': 'Server Failed!.'}
+
+        try:
+            # Send a transactional email
+            api_response = api_instance.send_transac_email(send_smtp_email)
+            print(api_response)
+        except ApiException as e:
+            # If Failed to send Email, delete entry on our side.
+            if not new_entry is None:
+                new_entry.delete()
+            print("Exception when calling TransactionalEmailsApi->send_transac_email: %s\n" % e)
+            return {'error': 'Email API Failed!.'}
+        return {'data': "Email Sent!"}
+
     @action(detail=False, methods=['POST'], permission_classes=[])
     def send_reset_code(self, request, pk=None):
+        '''  '''
         email = request.data.get("email")
-        generated_code = "1337godlike"
-        print(f"Sending {generated_code} to {email}")
-        # https://github.com/sendgrid/sendgrid-python/blob/main/use_cases/transactional_templates.md
-        minute = 60
-        try:
-            if not get_user_model().objects.filter(email=email).exists():
-                return Response({'error': 'User not found'})
+        user = self._get_user(email)
 
-        except Exception as e:
-            print("Error getting user or creating code.", e)
-            return Response({'error': 'Failed to find user with email.'})
+        if user is None:
+            return Response({'error': 'Failed to find email.'})
+
+        has_existing_code = self._check_expired_entry(email)
+        if has_existing_code:
+            print("User has code already")
+            return Response({'error': 'You already have an existing code. Please enter the code or wait 15 mins.'})
+
+        return Response(self._send_email(user))
+
+
+
+    @action(detail=False, methods=['POST'], permission_classes=[])
+    def reset_password(self, request, pk=None):
+        email = request.data.get("email")
+        user_code = request.data.get("reset_code")
+        new_password = request.data.get("new_password")
+        print("Resetting pass", email, user_code, new_password)
+
+        fifteen_mins_ago = tz.localize(
+            datetime.fromtimestamp(
+                datetime.now().timestamp() - (self.CODE_VALID_TIME)))
+
         try:
-            ResetPasswords.objects.get_or_create(
+            entry = ResetPasswords.objects.get(
                 email=email,
-                code=generated_code,
-                expires_at=datetime.fromtimestamp(int(time()) + (15 * minute))
+                code=user_code,
+                expires_at__gte= fifteen_mins_ago
             )
+
+            if user_code == entry.code:
+                # Change password
+                user = get_user_model().objects.get(email=email)
+                user.set_password(new_password)
+                user.save()
+                entry.delete()
+                return Response({'data': "Password reset."})
+
         except Exception as e:
-            print("Error getting user or creating code.", e)
-            return Response({'error': 'Failed to create code.'})
+            print("Error resetting password", e)
+            # TODO,
 
-        # sg = sendgrid.SendGridAPIClient(
-        #     api_key=env('SENDGRID_API_KEY'))
-        # from_email = Email(env('SENDGRIPD_FROM_EMAIL'))
-        # to_email = To(email)
-        # message = Mail(from_email, to_email)
-        # message.dynamic_template_data = {
-        #     'reset_code': generated_code,
-        # }
-        # message.template_id = 'd-37c297a72a8243ca8f105a0137ec304d'
+        return Response({'error': 'Failed to reset password.'})
 
-        # response = sg.send(message)
-        # print(response.status_code)
-        # print(response.body)
-        # print(response.headers)
 
-        return Response({'data': "Email Sent!"})
 
     @action(detail=False, methods=['POST'], permission_classes=[])
     def reset_password_with_old(self, request, pk=None):
@@ -150,34 +234,6 @@ class ResetPasswordEmailViewSet(viewsets.ViewSet):
         except Exception as e:
             print("Error", e)
             return Response({'error': ''})
-
-    @action(detail=False, methods=['POST'], permission_classes=[])
-    def reset_password(self, request, pk=None):
-        email = request.data.get("email")
-        user_code = request.data.get("reset_code")
-        new_password = request.data.get("new_password")
-        fifteen_mins_ago = datetime.now().timestamp() - (60 * 15)
-        try:
-            entries = ResetPasswords.objects.filter(
-                email=email,
-                expires_at__gte=datetime.fromtimestamp(fifteen_mins_ago)
-            )
-
-            if not entries or not entries.exists():
-                return Response({'error': "Code not found."})
-            entry = entries.first()
-            if user_code == entry.code:
-                # Change password
-                user = get_user_model().objects.get(email=email)
-                user.set_password(new_password)
-                user.save()
-                entry.delete()
-                return Response({'data': "Password reset."})
-
-        except Exception as e:
-            print("Error resetting password", e)
-
-        return Response({'error': 'Failed to reset password.'})
 
 
 class GroupViewSet(viewsets.ModelViewSet):

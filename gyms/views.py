@@ -372,8 +372,11 @@ class GymViewSet(DestroyWithPayloadMixin, viewsets.ModelViewSet, GymPermission):
             logo = request.data.get("logo")
 
             data['owner_id'] = request.user.id
-            del data['main']
-            del data['logo']
+            if 'main' in data:
+                del data['main']
+
+            if 'logo' in data:
+                del data['logo']
             print("main", type(main), dir(main))
 
             gym, newly_created = Gyms.objects.get_or_create(**data)

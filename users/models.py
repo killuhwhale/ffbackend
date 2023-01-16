@@ -1,7 +1,7 @@
 from django.db import models
 from django.conf import settings
 from django.db.models.signals import post_save
-
+import pyotp
 from django.dispatch import receiver
 from rest_framework.authtoken.models import Token
 from django.contrib.auth.models import AbstractUser
@@ -22,16 +22,21 @@ class UserManager(BaseUserManager):
         # However, we most likely wont need to add perms or groups at time of creation.
         # groups = extra_fields['groups']
         # perms = extra_fields['user_permissions']
+
+
+
         # TODO Change to false and have an email verification process
         # When use confirms email, change their account to active, is_active: True
         print("_create_user extra fields", extra_fields)
         extra_fields['is_active'] = True
+
+
         if "groups" in extra_fields:
             del extra_fields['groups']
         if "user_permissions" in extra_fields:
             del extra_fields['user_permissions']
-        
-        user = self.model(email=email, **extra_fields)
+
+        user = self.model(email=email, secret=pyotp.random_base32(), **extra_fields)
 
         user.set_password(password)
         user.save()
@@ -58,6 +63,7 @@ class User(AbstractUser):
 
     email = models.EmailField(_('email address'), unique=True)
     username = models.CharField(_('username'), max_length=100)
+    secret = models.CharField(_('secret'), max_length=32, blank=True, null=True)
 
     objects = UserManager()
 

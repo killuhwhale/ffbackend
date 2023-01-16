@@ -60,7 +60,6 @@ class UserManager(BaseUserManager):
 
 
 class User(AbstractUser):
-
     email = models.EmailField(_('email address'), unique=True)
     username = models.CharField(_('username'), max_length=100)
     secret = models.CharField(_('secret'), max_length=32, blank=True, null=True)
@@ -69,6 +68,7 @@ class User(AbstractUser):
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = []
+
     class META:
         app_label='users'
 

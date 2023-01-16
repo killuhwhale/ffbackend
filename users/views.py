@@ -116,7 +116,7 @@ class ResetPasswordEmailViewSet(viewsets.ViewSet):
 
         for entry in entries:
             # Time for expiration is greater than now, its in future.
-            print("Date cmp", entry.expires_at,  now, entry.expires_at >= now)
+            # print("Date cmp", entry.expires_at,  now, entry.expires_at >= now)
             if entry.expires_at >= now:
                 has_existing_code = True
             else:
@@ -186,7 +186,7 @@ class ResetPasswordEmailViewSet(viewsets.ViewSet):
         email = request.data.get("email")
         user_code = request.data.get("reset_code")
         new_password = request.data.get("new_password")
-        print("Resetting pass", email, user_code, new_password)
+        # print("Resetting pass", email, user_code, new_password)
 
         fifteen_mins_ago = tz.localize(
             datetime.fromtimestamp(

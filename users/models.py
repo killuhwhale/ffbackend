@@ -27,7 +27,6 @@ class UserManager(BaseUserManager):
 
         # TODO Change to false and have an email verification process
         # When use confirms email, change their account to active, is_active: True
-        print("_create_user extra fields", extra_fields)
         extra_fields['is_active'] = True
 
 
@@ -62,6 +61,7 @@ class UserManager(BaseUserManager):
 class User(AbstractUser):
     email = models.EmailField(_('email address'), unique=True)
     username = models.CharField(_('username'), max_length=100)
+    # Used for Time-Based One-Time Password Algorithm key
     secret = models.CharField(_('secret'), max_length=32, blank=True, null=True)
 
     objects = UserManager()

@@ -37,6 +37,57 @@ DO $$ DECLARE
       END $$;
 
 
+# Testing
+    # Gyms ✅
+        - Protect delete
+    # Gym Classes ✅
+        - Protect delete
+        - Protect create w/ gym
+
+    # Coaches ✅
+        - Protect create/delete
+            - Only gym owners can create coaches for a class
+
+    # Members ✅
+        - Protect create/delete
+            - Only gym owners or coaches can create members for a class
+
+
+    # WorkoutGroup ✅
+        - Protect create w/ ownerid
+        - Protect Delete, ensure archive
+        - Protect Finishing Empty Workout
+        - Protect Completeing WorkoutGroup
+            - Compelte is just creating a CompleteWorkoutGroup
+
+    # Completed WorkoutGroup
+        - Protect create ✅
+        - Protect delete
+            - Only User can delete their own completed workout Group
+
+    # Workouts ✅
+        - Delete only when workout it belongs to is unfinished
+        - Protect create
+            - Cannot create Workouts for the wrong WorkoutGroup or User
+
+    # Completed Workouts
+        - Should not have an API to delete
+
+    # WorkoutItems
+        - Delete only when workout->WorkoutGroup it belongs to is unfinished
+
+    # Completed WorkoutItems
+        - Should not have an API to delete
+
+    # WorkoutNames ✅
+        - API to delete only for SuperUser
+        - API to create only for SuperUser
+
+    # Users
+        - Users should not be able to modify other users
+
+
+
 Required Features:
     √ iOs and Android
     API work

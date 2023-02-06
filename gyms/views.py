@@ -127,7 +127,7 @@ def jbool(val: str) -> bool:
 
 
 class GymPermission(BasePermission):
-    message = "Only Gym owners can create or remove classes"
+    message = "Only Gym owners can remove their gym"
 
     def has_permission(self, request, view):
         if request.method in SAFE_METHODS:
@@ -136,7 +136,6 @@ class GymPermission(BasePermission):
         elif request.method == "POST":
             return True
         elif request.method == "DELETE":
-            print("GymClass perm view: ", )
             gym_id = view.kwargs['pk']
             return is_gym_owner(request.user, gym_id)
         return False
@@ -155,19 +154,75 @@ class GymClassPermission(BasePermission):
                 request.data.get("gym")
             )
         elif request.method == "DELETE":
-            print("GymClass perm view: ", )
             gym_class_id = view.kwargs['pk']
             return is_gym_class_owner(request.user, GymClasses.objects.get(id=gym_class_id))
         return False
 
 
-class WorkoutPermission(BasePermission):
-    message = """Only users can create/delete workouts for themselves or
-                for a class they own or are a coach of."""
+class CoachPermission(BasePermission):
+    message = """Only gym owners can create/delete a coach for their gymclasses."""
 
     def has_permission(self, request, view):
         # Need to check group id to see if the user has permission to do stuff.
-        print("Workout Perm: ", request.method,  view.action)
+        if request.method in SAFE_METHODS:
+            return True
+        elif request.method == "POST" and view.action == "create":
+            gym_class_id = request.data.get("gym_class", 0)
+            if not gym_class_id:
+                return Response(to_err("Error finding gym_class id"))
+
+            user = request.user
+            gym_class: GymClasses = GymClasses.objects.get(id=gym_class_id)
+            owner_id = gym_class.gym.owner_id
+            return str(owner_id) == str(user.id)
+
+        elif request.method == "DELETE" or request.method == "PATCH":
+            if not request.resolver_match.url_name == 'coaches-remove':
+                return False
+            member_id = request.data.get("user_id")
+            member = ClassMembers.objects.get(id=member_id)
+            gym_class_id = member.gym_class.id
+            gym_class: GymClasses = GymClasses.objects.get(id=gym_class_id)
+            owner_id = gym_class.gym.id
+            return str(owner_id) == str(request.user.id)
+
+class MemberPermission(BasePermission):
+    message = """Only gym owners or coaches can create/delete a member for their gymclasses."""
+
+    def has_permission(self, request, view):
+        # Need to check group id to see if the user has permission to do stuff.
+
+
+
+        if request.method in SAFE_METHODS:
+            return True
+        elif request.method == "POST" and view.action == "create":
+            gym_class_id = request.data.get("gym_class", 0)
+            if not gym_class_id:
+                return Response(to_err("Error finding gym_class id"))
+
+            gym_class: GymClasses = GymClasses.objects.get(id=gym_class_id)
+            return is_gym_owner(request.user, gym_class.gym.id) or is_gymclass_coach(request.user, gym_class)
+
+
+        elif request.method == "DELETE" or request.method == "PATCH":
+            print("Request", dir(request.resolver_match), request.resolver_match.url_name, request.resolver_match.view_name, request.resolver_match.route)
+            if not request.resolver_match.url_name == 'classmembers-remove':
+                return False
+
+            member_id = request.data.get("user_id")
+            member = ClassMembers.objects.get(id=member_id)
+            gym_class_id = member.gym_class.id
+            gym_class: GymClasses = GymClasses.objects.get(id=gym_class_id)
+            return is_gym_owner(request.user, gym_class.gym.id) or is_gymclass_coach(request.user, gym_class)
+
+
+
+class WorkoutPermission(BasePermission):
+    message = """Only users can create/delete workouts for themselves or for a class they own or are a coach of."""
+
+    def has_permission(self, request, view):
+        # Need to check group id to see if the user has permission to do stuff.
         if request.method in SAFE_METHODS:
             return True
         elif request.method == "POST" and view.action == "create":
@@ -178,10 +233,9 @@ class WorkoutPermission(BasePermission):
             workout_group: WorkoutGroups = WorkoutGroups.objects.get(
                 id=group_id)
             owner_id = workout_group.owner_id
-            print("Checking perm for: ", not workout_group.owned_by_class,
-                  type(owner_id), type(request.user.id))
 
             if workout_group.owned_by_class:
+                print("PPERM check:", is_gym_owner(request.user, gym_class.gym.id), is_gymclass_coach(request.user, gym_class))
                 gym_class = GymClasses.objects.get(id=owner_id)
                 return is_gym_owner(request.user, gym_class.gym.id) or is_gymclass_coach(request.user, gym_class)
             return not workout_group.owned_by_class and str(owner_id) == str(request.user.id)
@@ -203,12 +257,26 @@ class WorkoutPermission(BasePermission):
                 return not owned_by_class and str(request.user.id) == str(workout_group.owner_id)
 
 
+
+class SuperUserWritePermission(BasePermission):
+    message = """Only admins can create/delete workoutNames."""
+
+    def has_permission(self, request, view):
+        if request.method in SAFE_METHODS:
+            # Check permissions for read-only request
+            return True
+        elif request.method == "POST":
+            return request.user.is_superuser
+
+        elif request.method == "DELETE" or request.method == "PATCH":
+            return request.user.is_superuser
+        return False
+
 class WorkoutGroupsPermission(BasePermission):
     message = """Only users can create/delete workouts for themselves or
                 for a class they own or are a coach of."""
 
     def has_permission(self, request, view):
-        print("Checking WorkoutGroup perm: ", request.method)
         if request.method in SAFE_METHODS:
             # Check permissions for read-only request
             return True
@@ -221,15 +289,14 @@ class WorkoutGroupsPermission(BasePermission):
                     request.user, gym_class.gym.id) or is_gymclass_coach(request.user, gym_class))
                 return is_gym_owner(request.user, gym_class.gym.id) or is_gymclass_coach(request.user, gym_class)
 
-            return not jbool(request.data.get("owned_by_class"))
+            return not jbool(request.data.get("owned_by_class")) and \
+                str(request.user.id) == str(request.data.get("owner_id"))
 
         elif request.method == "DELETE" or request.method == "PATCH":
             # If owned_by_class
             workout_group_id = view.kwargs['pk']
             workout_group = WorkoutGroups.objects.get(id=workout_group_id)
             owned_by_class = workout_group.owned_by_class
-            print(owned_by_class, workout_group,
-                  request.user.id, workout_group.owner_id)
             if owned_by_class:
                 gym_class = GymClasses.objects.get(id=workout_group.owner_id)
                 return is_gym_owner(request.user, gym_class.gym.id) or is_gymclass_coach(request.user, gym_class)
@@ -295,22 +362,6 @@ class CreateWorkoutItemsPermission(BasePermission):
                     return is_gymclass_coach(request.user, gym_class) or is_gym_class_owner(request.user, gym_class)
                 else:
                     return str(request.user.id) == str(owner_id)
-
-        return False
-
-
-class RemoveClassMemberPermission(BasePermission):
-    message = """Only coaches and gym owners can remove classmembers."""
-
-    def has_permission(self, request, view):
-        if request.method in SAFE_METHODS:
-            # Check permissions for read-only request
-            return True
-
-        elif request.method == "DELETE":
-            gym_class_id = request.data.get("gym_class", "0")
-            gym_class = GymClasses.objects.get(id=gym_class_id)
-            return is_gym_class_owner(request.user, gym_class) or is_gymclass_coach(request.user, gym_class)
 
         return False
 
@@ -810,8 +861,17 @@ class WorkoutGroupsViewSet(viewsets.ModelViewSet, WorkoutGroupsPermission):
             workout_group = WorkoutGroups.objects.get(id=workout_group_id)
             if not workout_group.workouts_set.exists():
                 return Response(to_data("Cannot finish workoutgroup without workouts."))
+            else:
+                # Ensure that at least 1 workout has a workoutItem
+                has_items = False
+                for workout in workout_group.workouts_set.all():
+                    if workout.workoutitems_set.exists():
+                        has_items = True
+                if not has_items:
+                    return Response(to_data("Cannot finish workoutgroup without workout items."))
 
             # Permisson TODO create permission class
+            # This shoul be covered byt he permission class already....
             if workout_group.owned_by_class:
                 gym_class = GymClasses.objects.get(id=workout_group.owner_id)
                 if (not is_gym_class_owner(request.user, gym_class) and
@@ -833,16 +893,13 @@ class WorkoutGroupsViewSet(viewsets.ModelViewSet, WorkoutGroupsPermission):
         workout_group_id = pk
         workout_group = WorkoutGroups.objects.get(id=workout_group_id)
         if workout_group.finished:
-            print("workout group is finished, archingivng instead of deleting.")
             workout_group.archived = True
             workout_group.date_archived = datetime.now()
             workout_group.save()
-            return Response(to_data("Finished workout requested to delete, archived instead."))
-
-        print("workout group is not finished, deleting.")
+            return Response(WorkoutGroupsSerializer(workout_group, context={'request': request}).data)
         workout_group.delete()
         # workout_group.save() # This resavess the object and doesnt dlete it.
-        return Response(WorkoutGroupsSerializer(workout_group, context={'request': request}).data)
+        return Response(to_data('Deleted WorkoutGroup'))
 
 
 class WorkoutsViewSet(DestroyWithPayloadMixin, viewsets.ModelViewSet, WorkoutPermission):
@@ -866,8 +923,7 @@ class WorkoutsViewSet(DestroyWithPayloadMixin, viewsets.ModelViewSet, WorkoutPer
         print('Workout data:', data)
         workout, new_or_nah = Workouts.objects.get_or_create(**data)
         if not new_or_nah:
-            print("Not new, we have workout with id: ", workout, workout.id)
-            return Response(WorkoutSerializer(workout).data)
+            return Response(to_err("Workout with this data already exists."))
 
         return Response(WorkoutCreateSerializer(workout).data)
 
@@ -881,8 +937,9 @@ class WorkoutsViewSet(DestroyWithPayloadMixin, viewsets.ModelViewSet, WorkoutPer
     def destroy(self, request, pk=None):
         workout_id = pk
         workout = Workouts.objects.get(id=workout_id)
+        print(f"Destroying wod from group {workout.group.finished=}")
         if workout.group.finished:
-            return Response(to_err("Cannot remove workouts form completed workout group"))
+            return Response(to_err("Cannot remove workouts from finished workout group."), status=403)
 
         workout.delete()
         return Response(WorkoutSerializer(workout).data)
@@ -1159,11 +1216,10 @@ class CompletedWorkoutGroupsViewSet(DestroyWithPayloadMixin, viewsets.ModelViewS
         return CompletedWorkoutGroupsSerializer
 
 
-class CompletedWorkoutsViewSet(DestroyWithPayloadMixin, viewsets.ModelViewSet):
+class CompletedWorkoutsViewSet(DestroyWithPayloadMixin, viewsets.ModelViewSet, SuperUserWritePermission):
     queryset = CompletedWorkouts.objects.all()
     serializer_class = CompletedWorkoutSerializer
-    permission_classes = []
-
+    permission_classes = [SuperUserWritePermission]
 
 ########################################################
 #   ////////////////////////////////////////////////   #
@@ -1209,15 +1265,17 @@ class CombinedWorkoutGroups(DestroyWithPayloadMixin, viewsets.ViewSet):
 ########################################################
 
 
-class WorkoutNamesViewSet(viewsets.ModelViewSet):
+class WorkoutNamesViewSet(viewsets.ModelViewSet, SuperUserWritePermission):
     """
     API endpoint that allows users to be viewed or edited.
     """
     queryset = WorkoutNames.objects.all()
     serializer_class = WorkoutNamesSerializer
+    permission_classes=[SuperUserWritePermission]
 
     def create(self, request):
         # try:
+
         data = request.data.copy().dict()
         files = request.data.getlist("files", [])
         categories = json.loads(data['categories'])
@@ -1309,21 +1367,22 @@ class WorkoutNamesViewSet(viewsets.ModelViewSet):
             return Response(to_err("Failed to remove media"))
 
 
-class WorkoutCategoriesViewSet(viewsets.ModelViewSet):
+class WorkoutCategoriesViewSet(viewsets.ModelViewSet, SuperUserWritePermission):
     """
     API endpoint that allows users to be viewed or edited.
     """
     queryset = WorkoutNames.objects.all()
     serializer_class = WorkoutCategorySerializer
+    permission_classes=[SuperUserWritePermission]
 
-
-class CoachesViewSet(viewsets.ModelViewSet):
+class CoachesViewSet(viewsets.ModelViewSet, CoachPermission):
     """
     API endpoint that allows users to be viewed or edited.
     """
     queryset = Coaches.objects.all()
+    permission_classes = [CoachPermission]
 
-    @ action(detail=True, methods=['GET'], permission_classes=[])
+    @ action(detail=True, methods=['GET'])
     def coaches(self, request, pk=None):
         '''Gets all coaches for a class. '''
         coaches: List[Coaches] = Coaches.objects.filter(gym_class__id=pk)
@@ -1334,7 +1393,7 @@ class CoachesViewSet(viewsets.ModelViewSet):
         # return Response(CoachesSerializer(coaches, many=True).data)
         return Response(UserWithoutEmailSerializer(users, many=True).data)
 
-    @ action(detail=False, methods=['DELETE'], permission_classes=[RemoveCoachPermission])
+    @ action(detail=False, methods=['DELETE'])
     def remove(self, request, pk=None):
         try:
             remove_user_id = request.data.get("user_id", "0")
@@ -1356,15 +1415,16 @@ class CoachesViewSet(viewsets.ModelViewSet):
         return CoachesSerializer
 
 
-class ClassMembersViewSet(viewsets.ModelViewSet):
+class ClassMembersViewSet(viewsets.ModelViewSet, MemberPermission):
     """
     API endpoint that allows users to be viewed or edited.
     Permissions:
 
     """
     queryset = ClassMembers.objects.all()
+    permission_classes = [MemberPermission]
 
-    @ action(detail=True, methods=['GET'], permission_classes=[])
+    @ action(detail=True, methods=['GET'])
     def members(self, request, pk=None):
         '''Gets all members for a class. '''
         members: List[ClassMembers] = ClassMembers.objects.filter(
@@ -1376,8 +1436,9 @@ class ClassMembersViewSet(viewsets.ModelViewSet):
         # return Response(CoachesSerializer(coaches, many=True).data)
         return Response(UserWithoutEmailSerializer(users, many=True).data)
 
-    @ action(detail=False, methods=['DELETE'], permission_classes=[RemoveClassMemberPermission])
+    @ action(detail=False, methods=['DELETE'])
     def remove(self, request, pk=None):
+        print("REMOVING MEMBERSASDASDASDSAD")
         try:
             remove_user_id = request.data.get("user_id", "0")
             gym_class_id = request.data.get("gym_class", "0")

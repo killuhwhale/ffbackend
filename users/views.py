@@ -127,6 +127,7 @@ class ResetPasswordEmailViewSet(viewsets.ViewSet):
 
     def _send_email(self, user):
         # 4. Now we if we are proceeding, we can generate a new coed and send it & store it
+        # Time-Based One-Time Password Algorithm used to generate a unique code per user.
         code = pyotp.TOTP(user.secret, interval=5).now()  # Just create a code
         api_instance = sib_api_v3_sdk.TransactionalEmailsApi(
             sib_api_v3_sdk.ApiClient(configuration))

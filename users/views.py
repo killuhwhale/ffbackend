@@ -30,27 +30,38 @@ configuration = sib_api_v3_sdk.Configuration()
 configuration.api_key['api-key'] = env('SENDINBLUE_KEY')
 
 
-# Deprecated since we dont send user info with requests. We have tokens...
-class SelfActionPermission(BasePermission):
-    message = """Only users can perform actions for themselves."""
+class UserGroupsPermission(BasePermission):
+    message = """No perms"""
 
     def has_permission(self, request, view):
-        if request.method in SAFE_METHODS:
-            return True
-
-        if request.method == "POST" and not view.action == "CREATE":
-            user_id = view.kwargs['pk']
-            return str(user_id) == str(request.user.id)
         return False
 
+class UsersPermission(BasePermission):
+    message = """Only users can get or modify their own data. Except for profile image."""
+
+    def has_permission(self, request, view):
+        if view.action == "update" or view.action == "partial_update":
+            return False
+        elif request.method in SAFE_METHODS:
+            # Check permissions for read-only request
+            return True
+
+        elif request.method == "POST" and view.action == "create":
+            return True
+        elif view.action == "destroy":
+            user = request.user
+            user_id = view.kwargs['pk']
+            return str(user.id) == user_id
+        return False
 
 class UserViewSet(viewsets.ModelViewSet):
     """
     API endpoint that allows users to be viewed or edited.
+    /users/
     """
     queryset = get_user_model().objects.all().order_by('-date_joined')
     serializer_class = UserSerializer
-    permission_classes = []
+    permission_classes = [UsersPermission]
 
     @action(detail=False, methods=['POST'], permission_classes=[permissions.IsAuthenticated])
     def update_username(self, request, pk=None):
@@ -95,6 +106,7 @@ class UserViewSet(viewsets.ModelViewSet):
 class ResetPasswordEmailViewSet(viewsets.ViewSet):
     '''
       Sends Email code to reset password.
+      /user/
     '''
     minute = 60
     CODE_VALID_TIME= 15 * minute
@@ -122,7 +134,6 @@ class ResetPasswordEmailViewSet(viewsets.ViewSet):
             else:
                 # Expired code, delete it.
                 entry.delete()
-            pass
         return has_existing_code
 
     def _send_email(self, user):
@@ -194,6 +205,7 @@ class ResetPasswordEmailViewSet(viewsets.ViewSet):
                 datetime.now().timestamp() - (self.CODE_VALID_TIME)))
 
         try:
+            self._check_expired_entry(email)  # Clear all previously expired tokens.
             entry = ResetPasswords.objects.get(
                 email=email,
                 code=user_code,
@@ -231,10 +243,10 @@ class ResetPasswordEmailViewSet(viewsets.ViewSet):
                 user.set_password(new_password)
                 user.save()
                 return Response({'data': 'Changed password'})
-            return Response({'error': 'Invalid password'})
+            return Response({'error': 'Invalid password'}, status=403)
         except Exception as e:
             print("Error", e)
-            return Response({'error': ''})
+            return Response({'error': ''}, status=501)
 
 
 class GroupViewSet(viewsets.ModelViewSet):
@@ -243,7 +255,7 @@ class GroupViewSet(viewsets.ModelViewSet):
     """
     queryset = Group.objects.all()
     serializer_class = GroupSerializer
-    permission_classes = []
+    permission_classes = [UserGroupsPermission]
 
 
 class EmailTokenObtainPairView(TokenObtainPairView):

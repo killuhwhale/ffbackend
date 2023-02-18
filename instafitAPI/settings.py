@@ -17,7 +17,7 @@ import environ
 from datetime import timedelta
 from pathlib import Path
 import dj_database_url
-
+# from rest_framework_simplejwt.authentication import JWTAuthentication
 env = environ.Env(
     # set casting, default value
     DEBUG=(bool, False),
@@ -57,6 +57,7 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 5242880 * 2
 
 
 # https://django-rest-framework-simplejwt.readthedocs.io/en/latest/settings.html#settings
+JWT_KEY = env('JWT_SIGNING_KEY') if os.getenv("USER") == "killuh" else os.getenv("JWT_SIGNING_KEY", "")
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(days=10),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=30),
@@ -65,7 +66,7 @@ SIMPLE_JWT = {
     'UPDATE_LAST_LOGIN': False,
 
     'ALGORITHM': 'HS256',
-    'SIGNING_KEY': env('JWT_SIGNING_KEY') if os.getenv("USER") == "killuh" else os.getenv("JWT_SIGNING_KEY", ""),
+    'SIGNING_KEY': JWT_KEY,
     'VERIFYING_KEY': None,
     'AUDIENCE': None,
     'ISSUER': None,
@@ -122,6 +123,7 @@ MIDDLEWARE = [
     # 'django.contrib.auth.middleware.AuthenticationMiddleware',
     # 'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'instafitAPI.middleware.JWTMiddleware',
 ]
 AUTHENTICATION_BACKENDS = {
     'users.authBackend.EmailAuth'

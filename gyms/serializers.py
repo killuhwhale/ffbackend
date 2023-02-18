@@ -221,11 +221,6 @@ class WorkoutGroupsAutoCompletedSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
-class CombinedWorkoutGroupsSerializer(serializers.Serializer):
-    created_workout_groups = WorkoutGroupsSerializer(many=True, required=False)
-    completed_workout_groups = CompletedWorkoutGroupsSerializer(
-        many=True, required=False)
-
 
 class CombinedWorkoutsSerializer(serializers.Serializer):
     '''

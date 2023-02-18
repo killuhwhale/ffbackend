@@ -1,7 +1,7 @@
 import json
-from django.test import Client, RequestFactory, TestCase
+from django.test import Client, TestCase
 from django.urls import reverse
-from gyms.models import ClassMembers, Coaches, Gyms, GymClasses, WorkoutGroups, WorkoutItems, WorkoutNames, Workouts
+from gyms.models import ClassMembers, Coaches, CompletedWorkoutGroups, CompletedWorkoutItems, CompletedWorkouts, Gyms, GymClasses, WorkoutGroups, WorkoutItems, WorkoutNames, Workouts
 from django.contrib.auth import get_user_model
 from gyms.utils import tz_aware_date, tz_aware_today
 
@@ -118,6 +118,33 @@ class GymTestCase(TestCase):
             weights= '[135,150,185] ',
             weight_unit= 'lb',
             order= 1
+        )
+
+        self.completed_workout_group = CompletedWorkoutGroups.objects.create(
+            workout_group=self.workoutgroup_b_finished,
+            user_id=self.user_b.id,
+            title='Test Completed UserB',
+            caption='abc',
+            for_date=tz_aware_today(),
+        )
+        self.completed_workout = CompletedWorkouts.objects.create(
+            completed_workout_group=self.completed_workout_group,
+            workout=self.workout_b,
+            user_id=self.user_b.id,
+            title="UserB Completed Workout",
+            desc="xyz",
+            scheme_type=self.workout_b.scheme_type,
+            scheme_rounds=self.workout_b.scheme_rounds,
+        )
+
+        item = self.item_b.__dict__
+        del item['_state']
+        del item['id']
+        del item['workout_id']
+        self.completed_workout_item = CompletedWorkoutItems.objects.create(
+            user_id=self.user_b.id,
+            completed_workout=self.completed_workout,
+            **item
         )
 
 
@@ -499,5 +526,134 @@ class GymTestCase(TestCase):
             {'detail': 'Only users can create/delete workouts for themselves or for a class they own or are a coach of.'}
         )
 
+    def test_workout_items_create_under_wrong_user(self):
+        '''
+            Ensure that user A cannot create a WorkoutItem if it belongs to another user.
+        '''
+        # Todo finish test... tbelow is just ccopy/paste
+        res = self.req.post(f'/workoutItems/items/', {
+            "workout": self.workout_b.id,
+            "name": self.squat.id,
+            "order": 0,
+        }, HTTP_AUTHORIZATION= f'Bearer {self.jwt_token_a}')
+
+        self.assertEqual(res.status_code, 403)
+        self.assertEqual(
+            json.loads(res.content.decode()),
+            {'detail': 'Only users can create workout Items for themselves or for a class they own or are a coach of.'}
+        )
+
+    def test_workout_items_blocked_create(self):
+        '''
+            Ensure that user A cannot create a single WorkoutItem.
+        '''
+
+        res = self.req.post(f'/workoutItems/', {
+            "workout": self.workout_b.id,
+            "name": self.squat.id,
+            "order": 0,
+        }, HTTP_AUTHORIZATION= f'Bearer {self.jwt_token_a}')
+
+        self.assertEqual(res.status_code, 403)
+        self.assertEqual(
+            json.loads(res.content.decode()),
+            {'detail': 'Only users can create workout Items for themselves or for a class they own or are a coach of.'}
+        )
+
+    def test_workout_items_blocked_update(self):
+        '''
+            Ensure that a user cannot update a WorkoutItem directly.
+        '''
+
+        res = self.req.patch(f'/workoutItems/', {
+            "workout": self.workout_b.id,
+            "name": self.squat.id,
+            "order": 0,
+        }, HTTP_AUTHORIZATION= f'Bearer {self.jwt_token_a}')
+        self.assertEqual(res.status_code, 403)
+        self.assertEqual(
+            json.loads(res.content.decode()),
+            {'detail': 'Only users can create workout Items for themselves or for a class they own or are a coach of.'}
+        )
+
+    def test_workout_items_blocked_delete(self):
+        '''
+            Ensure that a user cannot update a WorkoutItem directly.
+        '''
+
+        res = self.req.delete(f'/workoutItems/1/', HTTP_AUTHORIZATION= f'Bearer {self.jwt_token_a}')
+        self.assertEqual(res.status_code, 403)
+        self.assertEqual(
+            json.loads(res.content.decode()),
+            {'detail': 'Only users can create workout Items for themselves or for a class they own or are a coach of.'}
+        )
+
+    def test_completed_workoutgroup_delete(self):
+        '''
+            Ensure that user A cannot delete user B's Completed WorkoutGroup.
+        '''
+
+
+        res = self.req.delete(f'/completedWorkoutGroups/{self.completed_workout_group.id}/', HTTP_AUTHORIZATION= f'Bearer {self.jwt_token_a}')
+        self.assertEqual(res.status_code, 403)
+        self.assertEqual(
+            json.loads(res.content.decode()),
+            {'detail': 'Only users can create/delete completed workoutgroups for themselves.'}
+        )
+
+    def test_completed_workout_delete(self):
+        '''
+            Ensure that user A cannot delete user B's Completed Workout.
+        '''
+
+        res = self.req.delete(f'/completedWorkouts/{self.completed_workout.id}/', HTTP_AUTHORIZATION= f'Bearer {self.jwt_token_a}')
+        self.assertEqual(res.status_code, 403)
+        self.assertEqual(
+            json.loads(res.content.decode()),
+            {'detail': 'Only users can create/delete completed workouts for themselves.'}
+        )
+
+
+    def test_completed_workout_create_blocked(self):
+        '''
+            Ensure that a user can't create a Completed Workout directly.
+        '''
+
+        res = self.req.post(f'/completedWorkouts/', {
+
+        }, HTTP_AUTHORIZATION= f'Bearer {self.jwt_token_a}')
+        self.assertEqual(res.status_code, 403)
+        self.assertEqual(
+            json.loads(res.content.decode()),
+            {'detail': 'Only users can create/delete completed workouts for themselves.'}
+        )
+
+    def test_completed_workout_update_blocked(self):
+        '''
+            Ensure that a user can't update a Completed Workout directly.
+        '''
+
+        res = self.req.put(f'/completedWorkouts/', {
+
+        }, HTTP_AUTHORIZATION= f'Bearer {self.jwt_token_a}')
+        self.assertEqual(res.status_code, 403)
+        self.assertEqual(
+            json.loads(res.content.decode()),
+            {'detail': 'Only users can create/delete completed workouts for themselves.'}
+        )
+
+    def test_completed_workout_partial_update_blocked(self):
+        '''
+            Ensure that a user can't update a Completed Workout directly.
+        '''
+
+        res = self.req.patch(f'/completedWorkouts/', {
+
+        }, HTTP_AUTHORIZATION= f'Bearer {self.jwt_token_a}')
+        self.assertEqual(res.status_code, 403)
+        self.assertEqual(
+            json.loads(res.content.decode()),
+            {'detail': 'Only users can create/delete completed workouts for themselves.'}
+        )
 
 

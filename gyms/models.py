@@ -179,6 +179,8 @@ class CompletedWorkoutItems(models.Model):
     # removed:   intensity, rounds
     sets = models.IntegerField(default=0)                      # 3
     reps = models.CharField(max_length=140, default="0")       # 5
+    pause_duration = models.FloatField(default=0.00)
+
     duration = models.CharField(max_length=140, default="0")   # None
     duration_unit = models.IntegerField(default=0)             # None
     distance = models.CharField(max_length=140, default="0")

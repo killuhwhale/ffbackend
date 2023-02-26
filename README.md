@@ -35,6 +35,20 @@ DO $$ DECLARE
       END $$;
 
 
+# Bugs:
+    - cannto delete gym if its favorited...
+        - should be able to delete gym and remove favorites....
+
+
+TODO
+- Add error for image size erros
+    - Curerntly limited to 5MB
+    - Error is:
+        - error cannot pickle '_io.BufferedRandom' object
+
+
+
+
 # Testing
     '''
         Look into Middleware
@@ -125,13 +139,6 @@ Required Features:
         ø Prefill user's weights based on previous entries
 
 
-
-
-TODO
-- Add error for image size erros
-    - Curerntly limited to 5MB
-    - Error is:
-        - error cannot pickle '_io.BufferedRandom' object
 
 
 Apple watch integrations?

@@ -9,6 +9,7 @@ class JWTMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
+        print(f"middleware req: {request.method=}")
         # Allow requests to endpoints without auth token
         if request.path in ['/login/', '/register/', '/token/', '/token/refresh/', '/users/']:
             response = self.get_response(request)

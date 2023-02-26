@@ -240,8 +240,8 @@ class WorkoutPermission(BasePermission):
             owner_id = workout_group.owner_id
 
             if workout_group.owned_by_class:
-                print("PPERM check:", is_gym_owner(request.user, gym_class.gym.id), is_gymclass_coach(request.user, gym_class))
                 gym_class = GymClasses.objects.get(id=owner_id)
+                # print("PPERM check:", is_gym_owner(request.user, gym_class.gym.id), is_gymclass_coach(request.user, gym_class))
                 return is_gym_owner(request.user, gym_class.gym.id) or is_gymclass_coach(request.user, gym_class)
             return not workout_group.owned_by_class and str(owner_id) == str(request.user.id)
         elif request.method == "DELETE":
@@ -290,6 +290,9 @@ class WorkoutGroupsPermission(BasePermission):
             # Check permissions for read-only request
             return True
         elif request.method == "POST" and view.action == "create":
+            res = not jbool(request.data.get("owned_by_class")) and \
+                str(request.user.id) == str(request.data.get("owner_id"))
+
             if jbool(request.data.get("owned_by_class")):
                 # Verify user is owner or coach of class
                 gym_class = GymClasses.objects.get(
@@ -340,14 +343,16 @@ class WorkoutItemsPermission(BasePermission):
 
     def has_permission(self, request, view):
         # Workout Items are create in bulk and are not modified nor deleted directly.
+        print("WorkoutITems 403 checkkkk", request.method, view.action)
         if view.action == "create" or view.action == "update" or view.action == "partial_update" or view.action == "destroy":
             return False
         elif request.method in SAFE_METHODS:
             # Check permissions for read-only request
             return True
 
-        elif request.method == "POST" and view.action == "create":
+        elif request.method == "POST" and view.action == "items":
             workout_id = request.data.get("workout", "0")
+            print("Perm check workoutItems", workout_id)
             if not workout_id == "0":
                 workout, workout_group = None, None
                 try:
@@ -440,7 +445,7 @@ class GymViewSet(DestroyWithPayloadMixin, viewsets.ModelViewSet, GymPermission):
     def create(self, request):
         try:
             data = request.data.copy().dict()
-            print(request.FILES, request.data)
+            print(request.FILES, data)
             main = request.data.get("main")
             logo = request.data.get("logo")
 
@@ -450,24 +455,27 @@ class GymViewSet(DestroyWithPayloadMixin, viewsets.ModelViewSet, GymPermission):
 
             if 'logo' in data:
                 del data['logo']
-            print("main", type(main), dir(main))
 
             gym, newly_created = Gyms.objects.get_or_create(**data)
             if not newly_created:
+                print("Gym already created. Must delete and reupload w/ media or edit gym.")
                 return Response(to_err("Gym already created. Must delete and reupload w/ media or edit gym."))
 
             parent_id = gym.id
             if main:
+                print("Uploading main image")
                 main_uploaded = s3_client.upload(
                     main, FILES_KINDS[GYM_FILES], parent_id, "main")
                 if not main_uploaded:
                     return Response(to_err("Failed to upload main image"))
-            if logo != '':
+            if logo:
+                print("Uploading main image")
                 logo_uploaded = s3_client.upload(
                     logo, FILES_KINDS[GYM_FILES], parent_id, "logo")
                 if not logo_uploaded:
                     return Response(to_err("Failed to upload logo"))
 
+            print("Gym created successfully", gym)
             return Response(GymSerializer(gym).data)
         except Exception as e:
             print("Failed to create Gym ", e)
@@ -565,8 +573,10 @@ class GymClassViewSet(DestroyWithPayloadMixin, viewsets.ModelViewSet, GymClassPe
             data = request.data.copy().dict()
             main = request.data.get("main")
             logo = request.data.get("logo")
-            del data['main']
-            del data['logo']
+            if 'main' in data:
+                del data['main']
+            if 'logo' in data:
+                del data['logo']
 
             data['private'] = jbool(data['private'])
             gym = Gyms.objects.get(id=data.get('gym'))
@@ -576,8 +586,17 @@ class GymClassViewSet(DestroyWithPayloadMixin, viewsets.ModelViewSet, GymClassPe
                 return Response(to_err("Gym class already created. Must delete and reupload w/ media or edit gym class."))
 
             parent_id = gym_class.id
-            s3_client.upload(main, FILES_KINDS[CLASS_FILES], parent_id, "main")
-            s3_client.upload(logo, FILES_KINDS[CLASS_FILES], parent_id, "logo")
+            if main:
+                print("Uploading main class image")
+                main_uploaded = s3_client.upload(main, FILES_KINDS[CLASS_FILES], parent_id, "main")
+                if not main_uploaded:
+                    return Response(to_err("Failed to upload main class image"))
+
+            if logo:
+                print("Uploading logo class image")
+                logo_uploaded = s3_client.upload(logo, FILES_KINDS[CLASS_FILES], parent_id, "logo")
+                if not logo_uploaded:
+                    return Response(to_err("Failed to upload logo class image"))
 
             return Response(GymClassCreateSerializer(gym_class).data)
         except Exception as e:

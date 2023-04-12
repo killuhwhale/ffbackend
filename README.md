@@ -2,15 +2,36 @@ psql -U gym_admin instafit_master
 sudo -u postgres psql -U gym_admin -d instafit_master -h 127.0.0.1
 
 
-AttributeError: Manager isn't available; 'auth.User' has been swapped for 'users.User'
-hon begi
+# Docker Usage
+## Prod
+ docker compose -f docker-compose_prod.yml up
+ docker compose -f docker-compose_prod.yml exec instafitapiprod bash migrate_create.sh
+ docker compose -f docker-compose_prod.yml down
 
+## Test
+    Run file from FitForm test_e2e.sh
+
+# Docker setup
+## Installation
+Install docker-desktop
+- Change to ubuntu from debian (correct line below - some direction provided the wrong URL)
+- deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu   focal stable
+sudo apt-get install docker-compose-plugin
+## Create instafitapi image
+docker build -t instafitapi .
+## start containers/services psql & db
+docker compose up
+## Execute commands on container - migrate db
+docker compose exec instafitapi python manage.py migrate
+docker compose exec instafitapi python manage.py shell < gyms/create_workout_names_copy.py
+
+# NOt sure - maybe GPU related...
 echo "515.86.01-0ubuntu0.20.04.1 hold" | sudo dpkg --set-selections
 
-
+# Run script through django shell
 ./manage.py shell < myscript.py
 
-
+# Update to github
 Git
 Update staging from main
 *main
@@ -19,13 +40,19 @@ git branch -M staging
 git push origin HEAD
 
 
-Reset DB:
+# Create new migrations for Trigger
+python manage.py makemigrations --empty gyms --name tigger_limit_
+python manage.py makemigrations --empty gyms --name func_
+python manage.py migrate --fake gyms migration_num
 
-# Delete migration files
+
+# Reset DB:
+
+## Delete migration files
 find . -path "*/migrations/*.py" -not -name "__init__.py" -delete
 find . -path "*/migrations/*.pyc" -delete
 
-# Drop tables
+## Drop tables
 DO $$ DECLARE
       r RECORD;
       BEGIN
@@ -36,11 +63,29 @@ DO $$ DECLARE
 
 
 # Bugs:
+    - Workout created with no title
     - cannto delete gym if its favorited...
         - should be able to delete gym and remove favorites....
 
+Things to do for formal launch:
+Figure out how to limit users per ID address.
+Setup emial verification....
+    - Limit users to creating accounts
 
 TODO
+Deploy to Digital Ocean...
+Clean up app UI a bit.
+Puts limits on get reqests:
+
+User should only be able to create:
+    - 3 gyms max
+    - 3 classes max
+    - 1 workout & completed group per day
+    - 10 workouts & completed per day
+    - 150 workoutitems & completed per day
+
+Deploy new app and add testers
+
 - Add error for image size erros
     - Curerntly limited to 5MB
     - Error is:

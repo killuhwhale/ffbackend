@@ -138,6 +138,7 @@ class GymPermission(BasePermission):
         elif request.method == "POST" and view.action == "create":
             return True
         elif request.method == "DELETE":
+            print("Deleting gym!!!!!!!!!!")
             gym_id = view.kwargs['pk']
             return is_gym_owner(request.user, gym_id)
         return False
@@ -432,6 +433,11 @@ class DestroyWithPayloadMixin(object):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
+########################################################
+#   ////////////////////////////////////////////////   #
+########################################################
+
+
 class GymViewSet(DestroyWithPayloadMixin, viewsets.ModelViewSet, GymPermission):
     """
     API endpoint that allows users to be viewed or edited.
@@ -456,10 +462,10 @@ class GymViewSet(DestroyWithPayloadMixin, viewsets.ModelViewSet, GymPermission):
             if 'logo' in data:
                 del data['logo']
 
-            gym, newly_created = Gyms.objects.get_or_create(**data)
-            if not newly_created:
-                print("Gym already created. Must delete and reupload w/ media or edit gym.")
-                return Response(to_err("Gym already created. Must delete and reupload w/ media or edit gym."))
+            gym = Gyms.objects.create(**data)
+            # if not newly_created:
+            #     print("Gym already created. Must delete and reupload w/ media or edit gym.")
+            #     return Response(to_err("Gym already created. Must delete and reupload w/ media or edit gym."))
 
             parent_id = gym.id
             if main:
@@ -601,7 +607,7 @@ class GymClassViewSet(DestroyWithPayloadMixin, viewsets.ModelViewSet, GymClassPe
             return Response(GymClassCreateSerializer(gym_class).data)
         except Exception as e:
             print(e)
-            return Response(to_err("Failed to create gymclass"))
+            return Response(to_err(f"Failed to create gymclass: {e}"))
 
     @action(detail=True, methods=['get'], permission_classes=[])
     def user_favorites(self, request, pk=None):
@@ -755,7 +761,7 @@ class WorkoutGroupsViewSet(viewsets.ModelViewSet, WorkoutGroupsPermission):
                 return Response(to_err("Workout already created. Must delete and reupload w/ media or edit workout.", ))
         except Exception as e:
             print("Error creating workout group:", e)
-            return Response(to_err("Error creating workout group:"))
+            return Response(to_err(f"Error creating workout group: {e}"))
 
         try:
             parent_id = workout_group.id
@@ -851,7 +857,7 @@ class WorkoutGroupsViewSet(viewsets.ModelViewSet, WorkoutGroupsPermission):
 
     @ action(detail=True, methods=['get'], permission_classes=[])
     def class_workouts(self, request, pk=None):
-        ''' Returns all workouts for a gym.
+        ''' Returns all workouts for a gymclass.
         '''
         try:
             workout_group_id = pk

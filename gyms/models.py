@@ -1,7 +1,7 @@
 from django.db import models
+from django.core.exceptions import ValidationError
+from functools import wraps
 
-
-# Create your models here.
 
 
 class Gyms(models.Model):
@@ -12,6 +12,8 @@ class Gyms(models.Model):
 
     class Meta:
         unique_together = [["title", "owner_id"]]
+
+
 
 
 class GymClasses(models.Model):

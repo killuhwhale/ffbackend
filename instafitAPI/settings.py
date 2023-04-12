@@ -184,14 +184,35 @@ WSGI_APPLICATION = 'instafitAPI.wsgi.application'
 #     }
 # }
 
+print(f"Env user: ", os.getenv("USER"))
+print(f"Args: ", sys.argv)
 
-if os.getenv("USER") == "killuh" or os.getenv("USER") == "chrisandaya":
+if os.getenv("USER") == "localdocker":
+    DATABASES = {
+        "default":  {
+            'ENGINE': 'django.db.backends.postgresql_psycopg2',
+            'NAME': env('POSTGRES_NAME'),
+            'USER': env('POSTGRES_USER'),
+            'PASSWORD':  env('POSTGRES_PASSWORD'),
+            'HOST': 'db',
+            'PORT': '5432',
+        }
+    }
+elif os.getenv("USER") == "killuh" or os.getenv("USER") == "chrisandaya":
     DATABASES = {
         "default":  {
             'ENGINE': 'django.db.backends.postgresql_psycopg2',
             'NAME': env('DEV_DB_NAME'),
             'USER': env('DEV_DB_USER'),
             'PASSWORD':  env('DEV_DB_PASS'),
+            'HOST': '127.0.0.1',
+            'PORT': '5432',
+        },
+        "test": {
+            'ENGINE': 'django.db.backends.postgresql_psycopg2',
+            'NAME': env('DEV_TEST_DB_NAME'),
+            'USER': env('DEV_TEST_DB_USER'),
+            'PASSWORD':  env('DEV_TEST_DB_PASS'),
             'HOST': '127.0.0.1',
             'PORT': '5432',
         }

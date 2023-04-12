@@ -10,6 +10,11 @@ from gyms.views import GymViewSet
 User =  get_user_model()
 
 class GymTestCase(TestCase):
+    '''
+        Collection of tests to ensure that basic funtionality is met.
+
+
+    '''
     def setUp(self):
         self.req = Client()
 
@@ -655,5 +660,4 @@ class GymTestCase(TestCase):
             json.loads(res.content.decode()),
             {'detail': 'Only users can create/delete completed workouts for themselves.'}
         )
-
 

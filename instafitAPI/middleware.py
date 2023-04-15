@@ -9,15 +9,15 @@ class JWTMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        print(f"middleware req: {request.method=}")
+        print(f"middleware req: {request.method=}, {request.path=}")
         # Allow requests to endpoints without auth token
-        if request.path in ['/login/', '/register/', '/token/', '/token/refresh/', '/users/']:
+        if request.path in ['/login/', '/register/', '/token/', '/token/refresh/', '/users/', '/emailvalidation/confirm_email/', '/emailvalidation/send_confirmation_email']:
             response = self.get_response(request)
             return response
 
         authorization = request.META.get('HTTP_AUTHORIZATION')
         if not authorization:
-            return JsonResponse({'error': 'Authorization header is missing'}, status=401)
+            return JsonResponse({'error': f'Authorization header is missing {request.path}'}, status=401)
 
         try:
             access_token = authorization.split(' ')[1]

@@ -1,8 +1,8 @@
 from django.contrib.auth.backends import BaseBackend
 from django.contrib.auth.hashers import check_password
 
-from users.models import User
-
+from django.contrib.auth import get_user_model
+User = get_user_model()
 
 class EmailAuth(BaseBackend):
     def authenticate(self, request, email=None, password=None):

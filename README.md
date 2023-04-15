@@ -64,7 +64,7 @@ DO $$ DECLARE
 
 # Bugs:
     - Workout created with no title
-    - cannto delete gym if its favorited...
+    - cannot delete gym if its favorited...
         - should be able to delete gym and remove favorites....
 
 Things to do for formal launch:
@@ -72,24 +72,83 @@ Figure out how to limit users per ID address.
 Setup emial verification....
     - Limit users to creating accounts
 
-TODO
+# TODO
 Deploy to Digital Ocean...
 Clean up app UI a bit.
-Puts limits on get reqests:
 
-User should only be able to create:
-    - 3 gyms max
-    - 3 classes max
-    - 1 workout & completed group per day
-    - 10 workouts & completed per day
-    - 150 workoutitems & completed per day
+
+
+- Email verification on register. Dont allow user to sign until verified
+1. On register (in register view), Create unique code like Reset Password, create URL and Email to user
+2. Setup endpoint to take in code and email, db lookup and change the users status.
+    3. Create Endpoint with HTML code to show a success page
+    4. Look up in db via email and code
+    5. Get user and set the default value.
+    6. remove code from db
+    7. Return HTML code.
+3. Create and Email template for this email @params url in a button with the link text too.
+
+
+
+
+
+
+# Implement Google Sign in
+https://developers.google.com/identity/one-tap/android/idtoken-auth
+- {
+  idToken: string,
+  serverAuthCode: string,
+  scopes: Array<string>, // on iOS this is empty array if no additional scopes are defined
+  user: {
+    email: string,
+    id: string,
+    givenName: string,
+    familyName: string,
+    photo: string, // url
+    name: string // full name
+  }
+}
+
+(Not worth doing right now....)
+# Process of One Tap Sign in:
+- OneTapSignIn returns tokenId -> JWT token signed by google, that contains user claims like email.
+- This token is sent to signInWithGoogle [new endpoint to create]
+- signInWithGoogle will:
+    - Takes tokenId
+    - Verifies w/ JWT token lib w/ google certs
+    - Looks up user via email.
+        - Create if not exists
+
+    - Now user exists..
+    - return user so that client is signed in.
+
+- Save token as google_token on front end, alongside existing tokens.
+
+## Sending request from front end.
+- When sending a request, get JWT token, if not exist, get GoogleToken.
+- Send Google Token in a new header
+
+## Populate user on back end based on headers.
+- Add new DEFAULT_AUTHENTICATION_CLASSES
+    - This will look for a the new header which will contain tokenID
+        - If not exists, return and let SIMPLEJWT take over and throw error if neccessary.
+    - Verify token against google cert
+    - Lookup user via email claim on JWT
+    - Populate user object... Mimic SIMPLEJWT class..
+
+
+
 
 Deploy new app and add testers
 
-- Add error for image size erros
-    - Curerntly limited to 5MB
-    - Error is:
-        - error cannot pickle '_io.BufferedRandom' object
+- Add error
+    - Triggers:
+        - When user attemps to create gyms, gymclass or Workout Group
+            - Inform user when fails to create. Currently  no errors...
+    - for image size erros
+        - Curerntly limited to 5MB
+        - Error is:
+            - error cannot pickle '_io.BufferedRandom' object
 
 
 

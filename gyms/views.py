@@ -21,18 +21,16 @@ from gyms.serializers import (
     GymClassFavoritesSerializer, GymFavoritesSerializer, LikedWorkoutsSerializer, WorkoutGroupsSerializer,
     WorkoutCreateSerializer, ProfileSerializer
 )
-
+from rest_framework_simplejwt.authentication import JWTAuthentication
 from gyms.models import BodyMeasurements, CompletedWorkoutGroups, CompletedWorkoutItems, CompletedWorkouts, Gyms, GymClasses, WorkoutCategories, Workouts, WorkoutItems, WorkoutNames, Coaches, ClassMembers, GymClassFavorites, GymFavorites, LikedWorkouts, WorkoutGroups
 from django.db.models import Q, Exists
-import uuid
+
 from .s3 import s3Client
 from django.core.files.uploadedfile import InMemoryUploadedFile, TemporaryUploadedFile
 from PIL import Image
 from django.contrib.auth import get_user_model
 from itertools import chain
-import sendgrid
-import os
-from sendgrid.helpers.mail import Email, To, TemplateId, Mail
+
 tz = pytz.timezone("US/Pacific")
 s3_client = s3Client()
 env = environ.Env()
@@ -1041,6 +1039,10 @@ class WorkoutItemsViewSet(viewsets.ModelViewSet,  WorkoutItemsPermission ):
     """
     queryset = WorkoutItems.objects.all()
     permission_classes=[WorkoutItemsPermission]
+
+
+    def create(self, request, *args, **kwargs):
+        return super().create(request, *args, **kwargs)
 
     @ action(detail=False, methods=['post'], permission_classes=[WorkoutItemsPermission])
     def items(self, request, pk=None):

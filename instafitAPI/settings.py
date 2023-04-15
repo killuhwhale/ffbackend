@@ -95,7 +95,6 @@ SIMPLE_JWT = {
 INSTALLED_APPS = [
     'rest_framework',
     'rest_framework.authtoken',
-
     # 'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -186,7 +185,8 @@ WSGI_APPLICATION = 'instafitAPI.wsgi.application'
 
 print(f"Env user: ", os.getenv("USER"))
 print(f"Args: ", sys.argv)
-
+BASE_URL = ""
+# Todo Add spot for production when deployed w/ docker.
 if os.getenv("USER") == "localdocker":
     DATABASES = {
         "default":  {
@@ -198,6 +198,7 @@ if os.getenv("USER") == "localdocker":
             'PORT': '5432',
         }
     }
+    BASE_URL = "http://localhost:8000"
 elif os.getenv("USER") == "killuh" or os.getenv("USER") == "chrisandaya":
     DATABASES = {
         "default":  {
@@ -217,12 +218,14 @@ elif os.getenv("USER") == "killuh" or os.getenv("USER") == "chrisandaya":
             'PORT': '5432',
         }
     }
+    BASE_URL = "http://localhost:8000"
 elif len(sys.argv) == 0 or (len(sys.argv) > 1 and sys.argv[1] != 'collectstatic'):
     if os.getenv("DATABASE_URL", None) is None:
         raise Exception("DATABASE_URL environment variable not defined")
     DATABASES = {
         "default": dj_database_url.parse(os.environ.get("DATABASE_URL")),
     }
+    BASE_URL = 'https://starfish-app-r4hzq.ondigitalocean.app/'
 
 # Password validation
 # https://docs.djangoproject.com/en/4.0/ref/settings/#auth-password-validators

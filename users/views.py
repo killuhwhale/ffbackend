@@ -1,3 +1,5 @@
+from urllib import parse
+from django.http import HttpResponse, JsonResponse
 import environ
 import pyotp
 from datetime import datetime
@@ -18,6 +20,7 @@ from sib_api_v3_sdk.rest import ApiException
 from gyms.s3 import s3Client
 from gyms.views import FILES_KINDS
 from gyms.models import ResetPasswords
+from users.models import ConfirmationEmailCodes
 from users.serializers import (
     UserCreateSerializer, UserSerializer, GroupSerializer,
     UserWithoutEmailSerializer, TokenObtainPairSerializer
@@ -28,7 +31,9 @@ s3_client = s3Client()
 
 configuration = sib_api_v3_sdk.Configuration()
 configuration.api_key['api-key'] = env('SENDINBLUE_KEY')
-
+import logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.ERROR)
 
 class UserGroupsPermission(BasePermission):
     message = """No perms"""
@@ -103,6 +108,70 @@ class UserViewSet(viewsets.ModelViewSet):
         return UserSerializer
 
 
+class ConfirmEmailViewSet(viewsets.ViewSet):
+
+
+    def _html_code(self, verified_msg: str):
+        return f'''<!DOCTYPE html>
+            <html>
+            <head>
+                <title>Verification Page</title>
+                <!-- Load Bootstrap CSS from CDN -->
+                <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css">
+                <style>
+                    pre {'{'}
+                        line-height: 0.8;
+                        height: 200px;
+                    {'}'}
+                    body {'{'}
+                        background-color: #00bfff; /* Sick background color */
+                        color: white; /* Cool text color */
+                        font-size: 24px;
+                        font-weight: bold;
+                        text-align: center;
+                        margin-top: 100px;
+                    {'}'}
+                </style>
+            </head>
+            <body>
+
+                    <pre>
+    _______ __  ______                 .
+   / ____(_) /_/ ____/___  _________ ___
+  / /_  / / __/ /_  / __ \\/ ___/ __ `__ \\
+ / __/ / / /_/ __/ / /_/ / /  / / / / / /
+/_/   /_/\\__/_/    \\____/_/  /_/ /_/ /_/
+
+                    </pre>
+
+                <div class="container">
+                    <h1>{verified_msg}</h1>
+                </div>
+                <!-- Load Bootstrap JS from CDN -->
+                <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js"></script>
+            </body>
+            </html>'''
+
+    @action(detail=False, methods=['GET'], permission_classes=[])
+    def confirm_email(self, request, pk=None):
+        # Get params
+        try:
+            code = request.query_params.get('code')
+            email = request.query_params.get('email')
+            logger.critical(f"{code=} {email=}")
+
+            confirm_obj = ConfirmationEmailCodes.objects.get(email=email, code=code)
+            user = get_user_model().objects.get(email=email)
+            user.is_active = True
+            user.save()
+            confirm_obj.delete()
+            return HttpResponse(self._html_code("Verified successfully!"))
+        except Exception as error:
+            logger.critical(f"{error=}")
+            return HttpResponse(self._html_code("Failed to verify..."))
+
+
+
 class ResetPasswordEmailViewSet(viewsets.ViewSet):
     '''
       Sends Email code to reset password.
@@ -111,7 +180,7 @@ class ResetPasswordEmailViewSet(viewsets.ViewSet):
     minute = 60
     CODE_VALID_TIME= 15 * minute
 
-    def _get_user(sel, email: str):
+    def _get_user(self, email: str):
         try:
             return get_user_model().objects.get(email=email)
         except Exception as e:

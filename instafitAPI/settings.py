@@ -155,26 +155,6 @@ WSGI_APPLICATION = 'instafitAPI.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/4.0/ref/settings/#databases
 
-'''
-    https://medium.com/coding-blocks/creating-user-database-and-adding-access-on-postgresql-8bfcd2f4a91e
-    sudo -u postgres psql
-    postgres=# create database mydb;
-    postgres=# create user myuser with encrypted password 'mypass';
-    postgres=# grant all privileges on database mydb to myuser;
-
-
-    alter user gym_admin with encrypted password 'mostdope';
-    create user gym_admin with encrypted password 'mostdope';
-    create database instafit_master;
-    grant all privileges on database instafit_master to gym_admin;
-
-
-    ./manage.py makemigrations users
-    ./manage.py makemigrations gyms
-    ./manage.py migrate users
-    ./manage.py migrate gyms
-    ./manage.py migrate
-'''
 
 
 print(f"Env user: ", os.getenv("USER"))
@@ -213,7 +193,8 @@ elif os.getenv("USER") == "killuh" or os.getenv("USER") == "chrisandaya":
         }
     }
     BASE_URL = "http://localhost:8000"
-elif os.getenv("USER") == "DigOc":
+
+elif os.getenv("USER") == "DigOc" and len(sys.argv) > 1 and sys.argv[1] != 'collectstatic':
     if os.getenv("DATABASE_URL", None) is None:
         raise Exception("DATABASE_URL environment variable not defined")
     DATABASES = {

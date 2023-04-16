@@ -176,16 +176,6 @@ WSGI_APPLICATION = 'instafitAPI.wsgi.application'
     ./manage.py migrate
 '''
 
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.postgresql_psycopg2',
-#         'NAME': env('DEV_DB_NAME'),
-#         'USER': env('DEV_DB_USER'),
-#         'PASSWORD':  env('DEV_DB_PASS'),
-#         'HOST': '127.0.0.1',
-#         'PORT': '5432',
-#     }
-# }
 
 print(f"Env user: ", os.getenv("USER"))
 print(f"Args: ", sys.argv)

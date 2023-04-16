@@ -1,6 +1,24 @@
 psql -U gym_admin instafit_master
 sudo -u postgres psql -U gym_admin -d instafit_master -h 127.0.0.1
 
+# Set up local database (Using Docker is much better...)
+    https://medium.com/coding-blocks/creating-user-database-and-adding-access-on-postgresql-8bfcd2f4a91e
+    sudo -u postgres psql
+    postgres=# create database mydb;
+    postgres=# create user myuser with encrypted password 'mypass';
+    postgres=# grant all privileges on database mydb to myuser;
+
+    alter user gym_admin with encrypted password 'mostdope';
+    create user gym_admin with encrypted password 'mostdope';
+    create database instafit_master;
+    grant all privileges on database instafit_master to gym_admin;
+
+    ./manage.py makemigrations users
+    ./manage.py makemigrations gyms
+    ./manage.py migrate users
+    ./manage.py migrate gyms
+    ./manage.py migrate
+
 
 # Docker Usage
 ## Prod
@@ -63,37 +81,11 @@ DO $$ DECLARE
 
 
 # Bugs:
-    - Workout created with no title
-    - cannot delete gym if its favorited...
+    - Cannot delete gym if its favorited...
         - should be able to delete gym and remove favorites....
 
-Things to do for formal launch:
-Figure out how to limit users per ID address.
-Setup emial verification....
-    - Limit users to creating accounts
 
-# TODO
-Deploy to Digital Ocean...
-Clean up app UI a bit.
-
-
-
-- Email verification on register. Dont allow user to sign until verified
-1. On register (in register view), Create unique code like Reset Password, create URL and Email to user
-2. Setup endpoint to take in code and email, db lookup and change the users status.
-    3. Create Endpoint with HTML code to show a success page
-    4. Look up in db via email and code
-    5. Get user and set the default value.
-    6. remove code from db
-    7. Return HTML code.
-3. Create and Email template for this email @params url in a button with the link text too.
-
-
-
-
-
-
-# Implement Google Sign in
+# Implement Google Sign in (Not sure if its worth yet.. )
 https://developers.google.com/identity/one-tap/android/idtoken-auth
 - {
   idToken: string,
@@ -137,31 +129,14 @@ https://developers.google.com/identity/one-tap/android/idtoken-auth
     - Populate user object... Mimic SIMPLEJWT class..
 
 
-
-
-Deploy new app and add testers
-
 - Add error
-    - Triggers:
-        - When user attemps to create gyms, gymclass or Workout Group
-            - Inform user when fails to create. Currently  no errors...
     - for image size erros
         - Curerntly limited to 5MB
         - Error is:
             - error cannot pickle '_io.BufferedRandom' object
 
 
-
-
 # Testing
-    '''
-        Look into Middleware
-            - request.path is quite generic, might need to be more specfic on /users/
-            - Getting user information should only be done by auth user...
-
-    '''
-
-
     # Gyms ✅
         - Protect delete
     # Gym Classes ✅
@@ -242,16 +217,11 @@ Required Features:
         ø Taget intensity/ wt based on 1RM calculations
         ø Prefill user's weights based on previous entries
 
-
-
-
 Apple watch integrations?
 
 Names
 Fitness Platform
     - Fitform
-
-
 
 Endpoints
 

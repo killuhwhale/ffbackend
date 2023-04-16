@@ -37,7 +37,7 @@ env = environ.Env(
 environ.Env.read_env()
 
 DEVELOPMENT_MODE = os.getenv("DEVELOPMENT_MODE", "False") == "True"
-DEBUG = os.getenv("DEBUG", "False") == "True" or env('DEBUG') == "True"
+DEBUG = not os.getenv("USER", "False") == "DigOc"
 print(f"Settings {DEBUG=} {os.getenv('USER')=}")
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -223,7 +223,7 @@ elif os.getenv("USER") == "killuh" or os.getenv("USER") == "chrisandaya":
         }
     }
     BASE_URL = "http://localhost:8000"
-elif len(sys.argv) == 0 or (len(sys.argv) > 1 and sys.argv[1] != 'collectstatic'):
+elif os.getenv("USER") == "DigOc":
     if os.getenv("DATABASE_URL", None) is None:
         raise Exception("DATABASE_URL environment variable not defined")
     DATABASES = {

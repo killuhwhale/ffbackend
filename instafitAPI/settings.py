@@ -106,8 +106,8 @@ INSTALLED_APPS = [
     'users.apps.UsersConfig',
     'gyms',
 ]
-SECURE_SSL_REDIRECT = 0 if DEBUG else 1
-CSRF_COOKIE_SECURE = 0 if DEBUG else 1
+# SECURE_SSL_REDIRECT = 0 if DEBUG else 1
+# CSRF_COOKIE_SECURE = 0 if DEBUG else 1
 # SECURE_HSTS_SECONDS = 60 * 60 * 24 * 1
 
 AUTH_USER_MODEL = 'users.User'

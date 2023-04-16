@@ -27,7 +27,7 @@ configuration.api_key['api-key'] = env('SENDINBLUE_KEY')
 
 class UserManager(BaseUserManager):
     use_in_migrations = True
-    TESTING = os.getenv("TEST_SCRIPT")
+    TESTING = not os.getenv("USER", "") == "DigOc"
     logger.critical(f"{TESTING=}")
     def send_confirmation_email(self, email):
         ''' After register is called, this should be called,'''

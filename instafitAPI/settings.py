@@ -106,8 +106,8 @@ INSTALLED_APPS = [
     'users.apps.UsersConfig',
     'gyms',
 ]
-SECURE_SSL_REDIRECT = True
-CSRF_COOKIE_SECURE = True
+SECURE_SSL_REDIRECT = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
 # SECURE_HSTS_SECONDS = 60 * 60 * 24 * 1
 
 AUTH_USER_MODEL = 'users.User'
@@ -194,7 +194,7 @@ elif os.getenv("USER") == "killuh" or os.getenv("USER") == "chrisandaya":
     }
     BASE_URL = "http://localhost:8000"
 
-elif os.getenv("USER") == "DigOc" and len(sys.argv) > 1 and sys.argv[1] != 'collectstatic':
+elif os.getenv("USER") == "DigOc" and len(sys.argv) > 1 and sys.argv[1] != 'collectstatic':  # Need this collectstatic check to avoid erros during build step in DigitalOcean
     if os.getenv("DATABASE_URL", None) is None:
         raise Exception("DATABASE_URL environment variable not defined")
     DATABASES = {

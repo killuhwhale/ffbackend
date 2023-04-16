@@ -38,6 +38,7 @@ environ.Env.read_env()
 
 DEVELOPMENT_MODE = os.getenv("DEVELOPMENT_MODE", "False") == "True"
 DEBUG = os.getenv("DEBUG", "False") == "True" or env('DEBUG') == "True"
+print(f"Settings {DEBUG=} {os.getenv('USER')=}")
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -105,6 +106,9 @@ INSTALLED_APPS = [
     'users.apps.UsersConfig',
     'gyms',
 ]
+SECURE_SSL_REDIRECT = True
+CSRF_COOKIE_SECURE = True
+# SECURE_HSTS_SECONDS = 60 * 60 * 24 * 1
 
 AUTH_USER_MODEL = 'users.User'
 

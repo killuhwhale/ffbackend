@@ -1,7 +1,4 @@
 from gyms.models import WorkoutNames, WorkoutCategories
-
-
-
 categories = [
     {'title': 'Jiu jitsu',},  # 1
     {'title': 'Weightlifting',},  # 2
@@ -32,13 +29,11 @@ categories = [
     {'title': 'Rowing',},  # 27
     # Muscle groups for body-builders
 ]
-
 for cat in categories:
     try:
         WorkoutCategories.objects.create(**cat)
     except Exception as e:
         print("Err creating categories ", e)
-
 
 workout_names = [
 {'name': 'Air Squat', 'desc': 'Bodyweight squat with arms extended.', 'categories': [3, 4, 14, 15], 'primary_id': 15, 'secondary_id': 1},
@@ -139,13 +134,12 @@ workout_names = [
 {'name': 'Wall Balls', 'desc': 'Wall balls are a functional fitness exercise that involves throwing a weighted ball against a wall and catching it as it comes back down. This exercise targets several muscle groups including the legs, hips, core, shoulders, and arms. It is often used in CrossFit and other high-intensity training programs.', 'categories': [6, 15, 24], 'primary_id': 6, 'secondary_id': 1},
 {'name': 'Windshield Wiper', 'desc': 'The windshield wiper exercise is a core strengthening exercise that targets the obliques and lower abs. It involves lying on the back with the legs raised and extended, and then moving the legs from side to side in a "windshield wiper" motion. This exercise is typically performed on a mat or bench, and can be modified to increase or decrease the difficulty level.', 'categories': [23], 'primary_id': 23, 'secondary_id': 1},
 ]
-
 for wname in workout_names:
-    # cats = [cat + 22 for cat in wname['categories']]
+    cats = [cat + 23 for cat in wname['categories']]
     cats = [cat for cat in wname['categories']]
     del wname['categories']
-    # wname['primary_id'] += 22
-    # wname['secondary_id'] += 22
+    wname['primary_id'] += 23
+    wname['secondary_id'] += 23
     try:
         new_obj = WorkoutNames.objects.create(**wname)
         new_obj.categories.set(cats)

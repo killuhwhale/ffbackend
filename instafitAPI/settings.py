@@ -200,7 +200,7 @@ elif os.getenv("USER") == "DigOc" and len(sys.argv) > 1 and sys.argv[1] != 'coll
     DATABASES = {
         "default": dj_database_url.parse(os.environ.get("DATABASE_URL")),
     }
-    BASE_URL = 'https://starfish-app-r4hzq.ondigitalocean.app/'
+    BASE_URL = 'https://starfish-app-r4hzq.ondigitalocean.app'
 
 # Password validation
 # https://docs.djangoproject.com/en/4.0/ref/settings/#auth-password-validators

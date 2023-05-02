@@ -11,5 +11,5 @@ class EmailAuth(BaseBackend):
             if(check_password(password, user.password)):
                 return user
         except Exception as e:
-            print("EmailAuth error: ", e)
+            print(f"EmailAuth error: ({email=})", e)
         return None

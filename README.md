@@ -202,6 +202,9 @@ https://developers.google.com/identity/one-tap/android/idtoken-auth
                 - Add special header from inside app
 
 
+# Todo
+PASSWORD RETUREND WHEN REGISTERING SHOULDNT
+
 Required Features:
     √ iOs and Android
     API work

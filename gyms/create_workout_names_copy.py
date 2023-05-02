@@ -135,11 +135,11 @@ workout_names = [
 {'name': 'Windshield Wiper', 'desc': 'The windshield wiper exercise is a core strengthening exercise that targets the obliques and lower abs. It involves lying on the back with the legs raised and extended, and then moving the legs from side to side in a "windshield wiper" motion. This exercise is typically performed on a mat or bench, and can be modified to increase or decrease the difficulty level.', 'categories': [23], 'primary_id': 23, 'secondary_id': 1},
 ]
 for wname in workout_names:
-    cats = [cat + 23 for cat in wname['categories']]
+    # cats = [cat + 23 for cat in wname['categories']]
     cats = [cat for cat in wname['categories']]
     del wname['categories']
-    wname['primary_id'] += 23
-    wname['secondary_id'] += 23
+    # wname['primary_id'] += 23
+    # wname['secondary_id'] += 23
     try:
         new_obj = WorkoutNames.objects.create(**wname)
         new_obj.categories.set(cats)

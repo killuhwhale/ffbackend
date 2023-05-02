@@ -101,6 +101,7 @@ class UserViewSet(viewsets.ModelViewSet):
             return Response("Error uploading user profile image")
 
     def get_serializer_class(self):
+        print("User serializer: ", self.action)
         if self.action == 'list' or self.action == 'retrieve':
             return UserWithoutEmailSerializer
         elif self.action == "create":

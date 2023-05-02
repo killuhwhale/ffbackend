@@ -127,6 +127,7 @@ MIDDLEWARE = [
     # 'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'instafitAPI.middleware.JWTMiddleware',
+    'instafitAPI.middleware.LogMiddleware',
 ]
 AUTHENTICATION_BACKENDS = {
     'users.authBackend.EmailAuth'

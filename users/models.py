@@ -31,7 +31,9 @@ class UserManager(BaseUserManager):
     logger.critical(f"{TESTING=}")
     def send_confirmation_email(self, email):
         ''' After register is called, this should be called,'''
-        if self.TESTING: return
+        if self.TESTING:
+            logger.critical(f"{self.TESTING=} returning and not sending confirmation email.")
+            return True
         try:
             code = pyotp.TOTP(pyotp.random_base32()).now()  # Just create a code
             ConfirmationEmailCodes.objects.create(email=email, code=code)
@@ -65,10 +67,6 @@ class UserManager(BaseUserManager):
         # groups = extra_fields['groups']
         # perms = extra_fields['user_permissions']
 
-
-
-        # TODO Change to false and have an email verification process
-        # When use confirms email, change their account to active, is_active: True
         extra_fields['is_active'] = False
         if self.TESTING:
             extra_fields['is_active'] = True

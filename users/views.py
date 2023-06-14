@@ -5,7 +5,7 @@ import pyotp
 from datetime import datetime
 from django.contrib.auth import get_user_model
 from django.contrib.auth.hashers import check_password
-from django.contrib.auth.models import User, Group
+from django.contrib.auth.models import Group
 from django.db.utils import IntegrityError
 import pytz
 from rest_framework import viewsets
@@ -15,6 +15,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import BasePermission, SAFE_METHODS
 from rest_framework_simplejwt.views import TokenObtainPairView
 from time import time
+from rest_framework.parsers import JSONParser
 import sib_api_v3_sdk
 from sib_api_v3_sdk.rest import ApiException
 from gyms.s3 import s3Client
@@ -34,6 +35,7 @@ configuration.api_key['api-key'] = env('SENDINBLUE_KEY')
 import logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.ERROR)
+User = get_user_model()
 
 class UserGroupsPermission(BasePermission):
     message = """No perms"""
@@ -86,6 +88,32 @@ class UserViewSet(viewsets.ModelViewSet):
     def user_info(self, request, pk=None):
         if request.user:
             return Response(UserSerializer(request.user).data)
+        return Response({})
+
+    @action(detail=False, methods=['post'], permission_classes=[permissions.IsAuthenticated], parser_classes=[JSONParser])
+    def update_sub(self, request, pk=None):
+        if request.user:
+
+            subbed = request.data.get("subscribed")
+            sub_end_date = request.data.get("sub_end_date")
+            user = User.objects.get(id=request.user.id)
+            user.subscribed = subbed
+            user.sub_end_date = sub_end_date
+            user.save()
+
+            return Response(UserSerializer(user).data)
+        return Response({})
+
+    @action(detail=False, methods=['post'], permission_classes=[permissions.IsAuthenticated], parser_classes=[JSONParser])
+    def update_customer_id(self, request, pk=None):
+        if request.user:
+
+            customer_id = request.data.get("customer_id")
+            user = User.objects.get(id=request.user.id)
+            user.customer_id = customer_id
+            user.save()
+
+            return Response(UserSerializer(user).data)
         return Response({})
 
     @action(detail=False, methods=['post'], permission_classes=[permissions.IsAuthenticated])

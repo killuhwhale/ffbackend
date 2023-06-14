@@ -1,10 +1,12 @@
 from datetime import datetime, time, timedelta
+from enum import Enum
+from django.db.utils import InternalError
 import environ
 from django.core.serializers import serialize
 from itertools import chain
 import json
 import pytz
-from typing import Dict, List
+from typing import Any, Dict, List
 from rest_framework import viewsets, status
 from rest_framework.parsers import JSONParser, MultiPartParser, FormParser, FileUploadParser
 from rest_framework.decorators import action
@@ -61,9 +63,21 @@ def is_gym_class_owner(user, gym_class):
     return user and gym_class and str(user.id) == str(gym_class.gym.owner_id)
 
 
-def to_err(msg, err_type=0):
+
+class ResponseError(Enum):
+    GENERIC_ERROR = 0
+    CREATE_LIMIT = 1
+
+def to_err(msg: str, exception: Exception=None)-> Dict[str, Any]:
+    '''
+        Returns an error value.
+    '''
+    err_type = ResponseError.GENERIC_ERROR
+    if is_limit_exception(exception):
+        err_type = ResponseError.CREATE_LIMIT
+
     return {
-        "error": msg, 'err_type': err_type
+        "error": msg, 'err_type': err_type.value
     }
 
 
@@ -123,6 +137,25 @@ def delete_media(parent_id, remove_media_ids, file_kind) -> Dict:
 def jbool(val: str) -> bool:
     return True if val == "true" else False
 
+
+def is_limit_exception(e: Exception):
+    ''' Returns True when the exception is an Error due to the limits set.
+
+        Limits set with Migration files as triggers.
+        Gyms, GymClasses and Workouts are limited.
+
+        Gyms = 3
+        GymClasses = 3
+        WorkoutGroups = 1
+        Need to Add:
+        CompletedWorkoutGroups.
+
+        *Should also set limits to prevent users from completing everysingle workout or adding an absurd amount of workouts/ workoutItems to a single workout.
+        - There might be FrontEnd restrictions on some of these but the backend should enforce it as well.
+
+    '''
+    if e is None: return False
+    return type(e) == InternalError and str(e).startswith("Too many rows found")
 
 class GymPermission(BasePermission):
     message = "Only Gym owners can remove their gym"
@@ -483,7 +516,7 @@ class GymViewSet(DestroyWithPayloadMixin, viewsets.ModelViewSet, GymPermission):
             return Response(GymSerializer(gym).data)
         except Exception as e:
             print("Failed to create Gym ", e)
-            return Response(to_err(f"Failed to create Gym: {e}"))
+            return Response(to_err(f"Failed to create Gym: {e}", exception=e), status=422)
 
     @action(detail=True, methods=['get'], permission_classes=[])
     def user_favorites(self, request, pk=None):
@@ -605,7 +638,7 @@ class GymClassViewSet(DestroyWithPayloadMixin, viewsets.ModelViewSet, GymClassPe
             return Response(GymClassCreateSerializer(gym_class).data)
         except Exception as e:
             print(e)
-            return Response(to_err(f"Failed to create gymclass: {e}"))
+            return Response(to_err(f"Failed to create gymclass: {e}", exception=e), status=422)
 
     @action(detail=True, methods=['get'], permission_classes=[])
     def user_favorites(self, request, pk=None):
@@ -759,7 +792,7 @@ class WorkoutGroupsViewSet(viewsets.ModelViewSet, WorkoutGroupsPermission):
                 return Response(to_err("Workout already created. Must delete and reupload w/ media or edit workout.", ))
         except Exception as e:
             print("Error creating workout group:", e)
-            return Response(to_err(f"Error creating workout group: {e}"))
+            return Response(to_err(f"Error creating workout group: {e}", exception=e), status=422)
 
         try:
             parent_id = workout_group.id
@@ -982,17 +1015,17 @@ class WorkoutsViewSet(DestroyWithPayloadMixin, viewsets.ModelViewSet, WorkoutPer
         workout.delete()
         return Response(WorkoutSerializer(workout).data)
 
-
+# // Not used
 def NoDefaultBehavior(cls):
 
     '''
         Used to avoid default behavior on Viewset routes. A simple View could have been used, in hindsight.
         But to avoid reconfiguring the router, I would prefer to just shut down the default routes for now.
-        For example: WorkoutItems are not created one request at a time, instead they are create all in one request.
-        - we create an endpoint, items, which takes teh data and perfroms the task.
+        For example: WorkoutItems are not created one request at a time, instead they are created all in one request.
+        - we create an endpoint, items, which takes the data and perfroms the task.
         - So we want to use the same Structure in our project but for security, we do not want to allow access to the default endpoints.
         - We do not want a user to send a request to the server to create a single workout for an item or delete them.
-        - Also
+
         - Also, I dont want to bloat the permission classes to filter out requests for these endpoints.
 
 
@@ -1000,22 +1033,22 @@ def NoDefaultBehavior(cls):
     '''
 
     def list(self, request):
-        return Response(to_err("route not available", 404), status=404)
+        return Response(to_err("route not available", Exception()), status=404)
 
     def create(self, request):
-        return Response(to_err("route not available", 404), status=409)
+        return Response(to_err("route not available", Exception()), status=409)
 
     def retrieve(self, request, pk=None):
-        return Response(to_err("route not available", 404), status=404)
+        return Response(to_err("route not available", Exception()), status=404)
 
     def update(self, request, pk=None):
-        return Response(to_err("route not available", 404), status=404)
+        return Response(to_err("route not available", Exception()), status=404)
 
     def partial_update(self, request, pk=None):
-        return Response(to_err("route not available", 404), status=404)
+        return Response(to_err("route not available", Exception()), status=404)
 
     def destroy(self, request, pk=None):
-        return Response(to_err("route not available", 404), status=404)
+        return Response(to_err("route not available", Exception()), status=404)
 
     if getattr(cls, 'list').__qualname__ == "CreateModelMixin.list":
         setattr(cls, 'list', list)
@@ -1032,7 +1065,6 @@ def NoDefaultBehavior(cls):
     return cls
 
 
-
 class WorkoutItemsViewSet(viewsets.ModelViewSet,  WorkoutItemsPermission ):
     """
     API endpoint that allows users to be viewed or edited.
@@ -1042,7 +1074,8 @@ class WorkoutItemsViewSet(viewsets.ModelViewSet,  WorkoutItemsPermission ):
 
 
     def create(self, request, *args, **kwargs):
-        return super().create(request, *args, **kwargs)
+        # return super().create(request, *args, **kwargs)
+        return Response(to_err("Failed, route not available.", Exception()), status=404)
 
     @ action(detail=False, methods=['post'], permission_classes=[WorkoutItemsPermission])
     def items(self, request, pk=None):
@@ -1129,6 +1162,7 @@ class CompletedWorkoutGroupsViewSet(DestroyWithPayloadMixin, viewsets.ModelViewS
             print("Error creating CompletedWorkoutGroup:", e)
             if comp_workout_group:
                 comp_workout_group.delete()
+            return Response(to_err("Failed to create CompletedWorkoutGroup", e), status=422)
 
         uploaded_names = []
         try:
@@ -1302,6 +1336,15 @@ class CompletedWorkoutGroupsViewSet(DestroyWithPayloadMixin, viewsets.ModelViewS
         print("completed_workout_group_by_og_workout_group")
         return Response(CompletedWorkoutGroupsSerializer(complete_workout_group).data)
 
+    def update(self, request, *args, **kwargs):
+        # return super().create(request, *args, **kwargs)
+        return Response(to_err("Failed, route not available.", Exception()), status=404)
+    def partial_update(self, request, *args, **kwargs):
+        # return super().create(request, *args, **kwargs)
+        return Response(to_err("Failed, route not available.", Exception()), status=404)
+
+
+
     def get_serializer_class(self):
         if self.action == 'list' or self.action == 'retrieve':
             return CompletedWorkoutGroupsSerializer
@@ -1314,6 +1357,19 @@ class CompletedWorkoutsViewSet(DestroyWithPayloadMixin, viewsets.ModelViewSet):
     queryset = CompletedWorkouts.objects.all()
     serializer_class = CompletedWorkoutSerializer
     permission_classes = [CompletedWorkoutsPermission]
+
+    def create(self, request, *args, **kwargs):
+        # return super().create(request, *args, **kwargs)
+        return Response(to_err("Failed, route not available.", Exception()), status=404)
+    def update(self, request, *args, **kwargs):
+        # return super().create(request, *args, **kwargs)
+        return Response(to_err("Failed, route not available.", Exception()), status=404)
+    def partial_update(self, request, *args, **kwargs):
+        # return super().create(request, *args, **kwargs)
+        return Response(to_err("Failed, route not available.", Exception()), status=404)
+    def destroy(self, request, *args, **kwargs):
+        # return super().create(request, *args, **kwargs)
+        return Response(to_err("Failed, route not available.", Exception()), status=404)
 
 ########################################################
 #   ////////////////////////////////////////////////   #
@@ -1427,7 +1483,6 @@ class WorkoutNamesViewSet(viewsets.ModelViewSet, SuperUserWritePermission):
             print(e)
             return Response(to_err("Failed to remove media"))
 
-
 class WorkoutCategoriesViewSet(viewsets.ModelViewSet, SuperUserWritePermission):
     """
     API endpoint that allows users to be viewed or edited.
@@ -1467,6 +1522,17 @@ class CoachesViewSet(viewsets.ModelViewSet, CoachPermission):
             print(e)
 
         return Response(to_err("Failed to remove coach"))
+
+    def update(self, request, *args, **kwargs):
+        # return super().create(request, *args, **kwargs)
+        return Response(to_err("Failed, route not available.", Exception()), status=404)
+    def partial_update(self, request, *args, **kwargs):
+        # return super().create(request, *args, **kwargs)
+        return Response(to_err("Failed, route not available.", Exception()), status=404)
+    def destroy(self, request, *args, **kwargs):
+        # return super().create(request, *args, **kwargs)
+        return Response(to_err("Failed, route not available.", Exception()), status=404)
+
 
     def get_serializer_class(self):
         if self.action == 'list' or self.action == 'retrieve':
@@ -1510,6 +1576,17 @@ class ClassMembersViewSet(viewsets.ModelViewSet, MemberPermission):
             return Response(to_err("Failed to remove class member"))
 
         return Response(to_data("Deleted"))
+
+    def update(self, request, *args, **kwargs):
+        # return super().create(request, *args, **kwargs)
+        return Response(to_err("Failed, route not available.", Exception()), status=404)
+    def partial_update(self, request, *args, **kwargs):
+        # return super().create(request, *args, **kwargs)
+        return Response(to_err("Failed, route not available.", Exception()), status=404)
+    def destroy(self, request, *args, **kwargs):
+        # return super().create(request, *args, **kwargs)
+        return Response(to_err("Failed, route not available.", Exception()), status=404)
+
 
     def get_serializer_class(self):
         if self.action == 'list' or self.action == 'retrieve':
@@ -1578,6 +1655,7 @@ class ProfileViewSet(viewsets.ViewSet):
         data['completed_workout_groups'] = cwgs
         workouts['workout_groups'] = data
         return Response(ProfileWorkoutGroupsSerializer(workouts,  context={'request': request, }).data)
+
 
 
 class StatsViewSet(viewsets.ViewSet):

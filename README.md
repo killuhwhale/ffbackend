@@ -20,6 +20,11 @@ sudo -u postgres psql -U gym_admin -d instafit_master -h 127.0.0.1
     ./manage.py migrate
 
 
+# Limits
+- Gyms 3
+- GymClasses 3
+- WorkoutGroups 1
+
 # Docker Usage
 ## Prod
  docker compose -f docker-compose_prod.yml up

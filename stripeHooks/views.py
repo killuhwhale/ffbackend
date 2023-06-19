@@ -1,14 +1,16 @@
-import json
+import logging
 import os
+import stripe
+from datetime import datetime, timedelta
 from django.contrib.auth import get_user_model
+from django.http import JsonResponse
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
-from django.http import JsonResponse
-import logging
-import stripe
+from typing import Union
+
 from instafitAPI.settings import env
 from utils import get_env
-
+from users.models import User as UserType
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.ERROR)
@@ -21,13 +23,27 @@ User =  get_user_model()
 endpoint_secret = env("STRIPE_SIGNING_KEY") or os.getenv('STRIPE_SIGNING_KEY')
 
 
-def get_user_by_customer_id(stripe_obj):
+def get_user_by_customer_id(stripe_obj) -> Union[UserType, None]:
     try:
         customer_id = stripe_obj.customer
         return User.objects.get(customer_id=customer_id)
     except Exception as e:
         logger.critical(f"Failed to find user.", e)
     return None
+
+def get_future_datetime(dt: datetime) -> datetime:
+    '''Compares the given dt to the current datetime and returns the datetime that is furthest in the future.'''
+    current_dt = datetime.now()
+
+    if dt > current_dt:
+        return dt
+
+    return current_dt
+
+def add_days(start_date: datetime, days: int) -> datetime:
+    delta = timedelta(days=days)
+    new_date = start_date + delta
+    return new_date
 
 class HookViewSet(viewsets.ViewSet):
     '''
@@ -64,16 +80,22 @@ class HookViewSet(viewsets.ViewSet):
 
         # Handle the event
         if event and event['type'] == 'charge.succeeded':
-            charge = event['data']['object']
-            user = get_user_by_customer_id(charge)
-            print('Payment for {} succeeded at amt {}'.format(user, charge['amount']))
-            print(f"{charge=}")
+            try:
+                charge = event['data']['object']
+                user = get_user_by_customer_id(charge)
+                if not user:
+                    print(f"User not found, user is None.")
+                    return JsonResponse({"success": False})
+                print('Payment for {} succeeded at amt {}'.format(user, charge['amount']))
+                print(f"{charge=}")
+                days_to_add: int = int(charge['metadata']['duration'])
+                print(f"Adding {days_to_add} of days to user: {user.email}")
+                user.sub_end_date = add_days(get_future_datetime(user.sub_end_date), days_to_add)
+                user.save()
+            except Exception as err:
+                print(f"Error with charge event webhook: ", err)
+                return JsonResponse({"success": False})
 
-        elif event['type'] == 'customer.subscription.created':
-            sub = event['data']['object']
-            user = get_user_by_customer_id(sub)
-            print('Subscription for {} succeeded at amount {}'.format(user, charge['amount']))
-            print(f"{sub=}")
         else:
             # Unexpected event type
             print('Unhandled event type {}'.format(event['type']))

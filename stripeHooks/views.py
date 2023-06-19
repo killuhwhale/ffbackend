@@ -38,8 +38,8 @@ class HookViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=['POST'], permission_classes=[])
     def webhook(self, request, pk=None):
-        payload = request.data
-        event = request.data
+        payload = request.body.decode('utf-8')
+        event = None
         user = None
         print(f"{event=}")
 
@@ -56,7 +56,7 @@ class HookViewSet(viewsets.ViewSet):
             sig_header = request.headers.get('stripe-signature')
             try:
                 event = stripe.Webhook.construct_event(
-                    json.dumps(payload), sig_header, endpoint_secret
+                    payload, sig_header, endpoint_secret
                 )
             except stripe.error.SignatureVerificationError as e:
                 print('⚠️  Webhook signature verification failed.' + str(e))

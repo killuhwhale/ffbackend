@@ -1,6 +1,11 @@
 psql -U gym_admin instafit_master
 sudo -u postgres psql -U gym_admin -d instafit_master -h 127.0.0.1
 
+# Stripe
+
+stripe listen --forward-to localhost:8000/hooks/webhook/
+
+
 # Set up local database (Using Docker is much better...)
     https://medium.com/coding-blocks/creating-user-database-and-adding-access-on-postgresql-8bfcd2f4a91e
     sudo -u postgres psql
@@ -24,6 +29,7 @@ sudo -u postgres psql -U gym_admin -d instafit_master -h 127.0.0.1
 - Gyms 3
 - GymClasses 3
 - WorkoutGroups 1
+- CompletedWorkoutGroups 1
 
 # Docker Usage
 ## Prod

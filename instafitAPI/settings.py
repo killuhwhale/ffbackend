@@ -104,6 +104,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'storages',
     'users.apps.UsersConfig',
+    'stripeHooks.apps.StripehooksConfig',
     'gyms',
 ]
 # SECURE_SSL_REDIRECT = 0 if DEBUG else 1

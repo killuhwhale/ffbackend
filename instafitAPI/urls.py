@@ -18,9 +18,11 @@ from django.urls import include, path
 
 from users import urls as users_urls
 from gyms import urls as gyms_urls
+from stripeHooks import urls as hooks_urls
 
 urlpatterns = [
     # path('admin/', admin.site.urls),
     path('', include(users_urls)),
     path('', include(gyms_urls)),
+    path('', include(hooks_urls)),
 ]

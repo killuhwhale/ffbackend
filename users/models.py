@@ -16,10 +16,13 @@ from django.contrib.auth.base_user import BaseUserManager
 import sib_api_v3_sdk
 from sib_api_v3_sdk.rest import ApiException
 import logging
+import stripe
+from instafitAPI.settings import BASE_URL, env
 
-from instafitAPI.settings import BASE_URL
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.ERROR)
+stripe.api_key = env("STRIPE_SIGNING_KEY") or os.getenv('STRIPE_SIGNING_KEY')
 
 env = environ.Env()
 configuration = sib_api_v3_sdk.Configuration()
@@ -57,6 +60,12 @@ class UserManager(BaseUserManager):
             traceback.print_exc()
             return False
 
+    def _create_stripe_customer(self, email):
+        customer = stripe.Customer.create(
+            email=email
+        )
+        return customer.id
+
     def _create_user(self, email, password, **extra_fields):
         if not email:
             raise ValueError('Users require an email field')
@@ -78,8 +87,11 @@ class UserManager(BaseUserManager):
         if "user_permissions" in extra_fields:
             del extra_fields['user_permissions']
 
-        user = self.model(email=email, secret=pyotp.random_base32(), **extra_fields)
-        logger.critical(f"Seeting password: {password=}")
+        user: User = self.model(email=email, secret=pyotp.random_base32(), **extra_fields)
+        cusomter_id = self._create_stripe_customer(email)
+        logger.critical(f"Setting cusomter_id: {cusomter_id=}")
+        logger.critical(f"Setting password: {password=}")
+        user.customer_id = cusomter_id
         user.set_password(password)
         user.save()
         self.send_confirmation_email(email)

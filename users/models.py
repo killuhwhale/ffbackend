@@ -21,7 +21,7 @@ from utils import get_env
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.ERROR)
 
-stripe_key = get_env("STRIPE_SIGNING_KEY")
+stripe_key = get_env("STRIPE_API_KEY")
 logger.critical(f"{stripe_key=}")
 stripe.api_key = stripe_key
 
@@ -93,10 +93,10 @@ class UserManager(BaseUserManager):
             del extra_fields['user_permissions']
 
         user: User = self.model(email=email, secret=pyotp.random_base32(), **extra_fields)
-        cusomter_id = self._create_stripe_customer(email)
-        logger.critical(f"Setting cusomter_id: {cusomter_id=}")
+        customer_id = self._create_stripe_customer(email)
+        logger.critical(f"Setting customer_id: {customer_id=}")
         logger.critical(f"Setting password: {password=}")
-        user.customer_id = cusomter_id
+        user.customer_id = customer_id
         user.set_password(password)
         user.save()
         self.send_confirmation_email(email)

@@ -6,6 +6,7 @@ from rest_framework.decorators import action
 from django.http import JsonResponse
 import stripe
 from instafitAPI.settings import env
+from utils import get_env
 User =  get_user_model()
 
 # Replace this endpoint secret with your endpoint's unique secret
@@ -32,23 +33,25 @@ class HookViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=['POST'], permission_classes=[])
     def webhook(self, request, pk=None):
-        event = None
-        user = None
         payload = request.data
+        event = request.data
+        user = None
         print(f"{payload=}")
 
-        try:
-            event = json.loads(payload)
-        except Exception as e:
-            print('⚠️  Webhook error while parsing basic request.' + str(e))
-            return JsonResponse({"success": False})
+        # Testin dev server only...
+        # try:
+        #     event = json.loads(payload)
+        # except Exception as e:
+        #     print('⚠️  Webhook error while parsing basic request.' + str(e))
+        #     return JsonResponse({"success": False})
+
         if endpoint_secret:
             # Only verify the event if there is an endpoint secret defined
             # Otherwise use the basic event deserialized with json
             sig_header = request.headers.get('stripe-signature')
             try:
                 event = stripe.Webhook.construct_event(
-                    payload, sig_header, endpoint_secret
+                    json.dumps(payload), sig_header, endpoint_secret
                 )
             except stripe.error.SignatureVerificationError as e:
                 print('⚠️  Webhook signature verification failed.' + str(e))

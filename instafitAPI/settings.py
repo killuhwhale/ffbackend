@@ -17,6 +17,7 @@ import environ
 from datetime import timedelta
 from pathlib import Path
 import dj_database_url
+
 # from rest_framework_simplejwt.authentication import JWTAuthentication
 env = environ.Env(
     # set casting, default value
@@ -36,8 +37,15 @@ env = environ.Env(
 
 environ.Env.read_env()
 
-DEVELOPMENT_MODE = os.getenv("DEVELOPMENT_MODE", "False") == "True"
-DEBUG = not os.getenv("USER", "False") == "DigOc"
+def cenv(key, d=None):
+    """Combined  environments."""
+    if key in env:
+        return env(key)
+    return os.getenv(key, d)
+
+print(cenv("DEVELOPMENT_MODE", "False"))
+DEVELOPMENT_MODE = cenv("DEVELOPMENT_MODE", "False")
+DEBUG = not cenv("USER", "False") == "DigOc"
 print(f"Settings {DEBUG=} {os.getenv('USER')=}")
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -51,14 +59,15 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = get_random_secret_key()
 
 # ALLOWED_HOSTS = ["10.0.2.2", 'localhost', '127.0.0.1', '192.168.0.159']
-ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS",
+ALLOWED_HOSTS = cenv("DJANGO_ALLOWED_HOSTS",
                           "127.0.0.1,localhost").split(",")
 
 FILE_UPLOAD_MAX_MEMORY_SIZE = 5242880 * 2
 
 
 # https://django-rest-framework-simplejwt.readthedocs.io/en/latest/settings.html#settings
-JWT_KEY = env('JWT_SIGNING_KEY') if os.getenv("USER") == "killuh" else os.getenv("JWT_SIGNING_KEY", "")
+# JWT_KEY = env('JWT_SIGNING_KEY') if os.getenv("USER") == "killuh" else os.getenv("JWT_SIGNING_KEY", "")
+JWT_KEY = cenv('JWT_SIGNING_KEY')
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(days=10),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=30),

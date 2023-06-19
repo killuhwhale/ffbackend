@@ -1,7 +1,5 @@
 from datetime import datetime, timedelta
-import os
 import traceback
-import environ
 from urllib import parse
 from django.db import models
 from django.conf import settings
@@ -18,20 +16,23 @@ from sib_api_v3_sdk.rest import ApiException
 import logging
 import stripe
 from instafitAPI.settings import BASE_URL, env
-
+from utils import get_env
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.ERROR)
-stripe.api_key = env("STRIPE_SIGNING_KEY") or os.getenv('STRIPE_SIGNING_KEY')
 
-env = environ.Env()
+stripe_key = get_env("STRIPE_SIGNING_KEY")
+logger.critical(f"{stripe_key=}")
+stripe.api_key = stripe_key
+
+
 configuration = sib_api_v3_sdk.Configuration()
 configuration.api_key['api-key'] = env('SENDINBLUE_KEY')
 
 
 class UserManager(BaseUserManager):
     use_in_migrations = True
-    TESTING = not os.getenv("USER", "") == "DigOc"
+    TESTING = not get_env("USER") == "DigOc"
     logger.critical(f"{TESTING=}")
     def send_confirmation_email(self, email):
         ''' After register is called, this should be called,'''
@@ -61,10 +62,14 @@ class UserManager(BaseUserManager):
             return False
 
     def _create_stripe_customer(self, email):
-        customer = stripe.Customer.create(
-            email=email
-        )
-        return customer.id
+        try:
+            customer = stripe.Customer.create(
+                email=email
+            )
+            return customer.id
+        except Exception as err:
+            logger.critical(f"Error creating customer id: {err=}")
+            return None
 
     def _create_user(self, email, password, **extra_fields):
         if not email:

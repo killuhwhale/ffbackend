@@ -63,7 +63,7 @@ class HookViewSet(viewsets.ViewSet):
         elif event['type'] == 'customer.subscription.created':
             sub = event['data']['object']
             user = get_user_by_customer_id(sub)
-            print('Subscription for {} succeeded at amt {}'.format(user, charge['amount']))
+            print('Subscription for {} succeeded at amount {}'.format(user, charge['amount']))
 
         else:
             # Unexpected event type

@@ -23,8 +23,8 @@ endpoint_secret = env("STRIPE_SIGNING_KEY") or os.getenv('STRIPE_SIGNING_KEY')
 
 def get_user_by_customer_id(stripe_obj):
     try:
-        cusomter_id = stripe_obj.customer
-        return User.objects.get(cusomter_id=cusomter_id)
+        customer_id = stripe_obj.customer
+        return User.objects.get(customer_id=customer_id)
     except Exception as e:
         logger.critical(f"Failed to find user.", e)
     return None

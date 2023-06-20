@@ -80,37 +80,39 @@ class HookViewSet(viewsets.ViewSet):
                     return JsonResponse({"success": False})
 
             # Handle the event
-            if event and event['type'] == 'charge.succeeded':
-                try:
-                    charge = event['data']['object']
-                    user = get_user_by_customer_id(charge)
-                    if not user:
-                        print(f"User not found, user is None.")
-                        return JsonResponse({"success": False})
-                    print('Payment for {} succeeded at amt {}'.format(user, charge['amount']))
-                    print(f"{charge=}")
-                    days_to_add: int = int(charge['metadata']['duration'])
-                    print(f"Adding {days_to_add} of days to user: {user.email}")
-                    user.sub_end_date = add_days(get_future_datetime(user.sub_end_date), days_to_add)
-                    user.save()
-                except Exception as err:
-                    print(f"Error with charge event webhook: ", err)
-                    return JsonResponse({"success": False})
-            elif event['type'] == 'customer.subscription.created':
-                sub = event['data']['object']
-                print(f"Sub event: ", sub)
-                user = get_user_by_customer_id(sub)
-                if not user:
-                    print(f"User not found, user is None.")
-                    return JsonResponse({"success": False})
-                days_to_add: int = int(sub['metadata']['duration'])
-                print(f"Adding {days_to_add} of days to user: {user.email}")
-                user.sub_end_date = add_days(get_future_datetime(user.sub_end_date), days_to_add)
-                user.save()
-            elif event['type'] == 'invoice.paid':
-                sub = event['data']['object']
-                print(f"Sub event: ", sub)
-                user = get_user_by_customer_id(sub)
+            # if event and event['type'] == 'charge.succeeded':
+            #     try:
+            #         charge = event['data']['object']
+            #         user = get_user_by_customer_id(charge)
+            #         if not user:
+            #             print(f"User not found, user is None.")
+            #             return JsonResponse({"success": False})
+            #         print('Payment for {} succeeded at amt {}'.format(user, charge['amount']))
+            #         print(f"{charge=}")
+            #         days_to_add: int = int(charge['metadata']['duration'])
+            #         print(f"Adding {days_to_add} of days to user: {user.email}")
+            #         user.sub_end_date = add_days(get_future_datetime(user.sub_end_date), days_to_add)
+            #         user.save()
+            #     except Exception as err:
+            #         print(f"Error with charge event webhook: ", err)
+            #         return JsonResponse({"success": False})
+            # elif event['type'] == 'customer.subscription.created':
+            #     sub = event['data']['object']
+            #     print(f"Sub event: ", sub)
+            #     user = get_user_by_customer_id(sub)
+            #     if not user:
+            #         print(f"User not found, user is None.")
+            #         return JsonResponse({"success": False})
+            #     days_to_add: int = int(sub['metadata']['duration'])
+            #     print(f"Adding {days_to_add} of days to user: {user.email}")
+            #     user.sub_end_date = add_days(get_future_datetime(user.sub_end_date), days_to_add)
+            #     user.save()
+            if event and  event['type'] == 'invoice.paid':
+                invoice = event['data']['object']
+                print(f"Invoice event: ", invoice)
+                user = get_user_by_customer_id(invoice)
+                sub_start = invoice['lines']['data'][0]['period']['start']
+                sub_end = invoice['lines']['data'][0]['period']['end']
                 # Sub event to track when the subscription starts and stops.
                 # "current_period_end": 1689819310,
                 # "current_period_start": 1687227310,
@@ -118,9 +120,8 @@ class HookViewSet(viewsets.ViewSet):
                 if not user:
                     print(f"User not found, user is None.")
                     return JsonResponse({"success": False})
-                days_to_add: int = int(sub['metadata']['duration'])
-                print(f"Adding {days_to_add} of days to user: {user.email}")
-                user.sub_end_date = add_days(get_future_datetime(user.sub_end_date), days_to_add)
+
+                user.sub_end_date = datetime.fromtimestamp(sub_end)
                 user.save()
 
             else:

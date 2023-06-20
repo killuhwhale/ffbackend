@@ -54,62 +54,81 @@ class HookViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=['POST'], permission_classes=[])
     def webhook(self, request, pk=None):
-        payload = request.body.decode('utf-8')
-        event = None
-        user = None
-        print(f"{event=}")
+        try:
+            payload = request.body.decode('utf-8')
+            event = None
+            user = None
+            print(f"{event=}")
 
-        # Testin dev server only...
-        # try:
-        #     event = json.loads(payload)
-        # except Exception as e:
-        #     print('⚠️  Webhook error while parsing basic request.' + str(e))
-        #     return JsonResponse({"success": False})
+            # Testin dev server only...
+            # try:
+            #     event = json.loads(payload)
+            # except Exception as e:
+            #     print('⚠️  Webhook error while parsing basic request.' + str(e))
+            #     return JsonResponse({"success": False})
 
-        if endpoint_secret:
-            # Only verify the event if there is an endpoint secret defined
-            # Otherwise use the basic event deserialized with json
-            sig_header = request.headers.get('stripe-signature')
-            try:
-                event = stripe.Webhook.construct_event(
-                    payload, sig_header, endpoint_secret
-                )
-            except stripe.error.SignatureVerificationError as e:
-                print('⚠️  Webhook signature verification failed.' + str(e))
-                return JsonResponse({"success": False})
+            if endpoint_secret:
+                # Only verify the event if there is an endpoint secret defined
+                # Otherwise use the basic event deserialized with json
+                sig_header = request.headers.get('stripe-signature')
+                try:
+                    event = stripe.Webhook.construct_event(
+                        payload, sig_header, endpoint_secret
+                    )
+                except stripe.error.SignatureVerificationError as e:
+                    print('⚠️  Webhook signature verification failed.' + str(e))
+                    return JsonResponse({"success": False})
 
-        # Handle the event
-        if event and event['type'] == 'charge.succeeded':
-
-            try:
-                charge = event['data']['object']
-                user = get_user_by_customer_id(charge)
+            # Handle the event
+            if event and event['type'] == 'charge.succeeded':
+                try:
+                    charge = event['data']['object']
+                    user = get_user_by_customer_id(charge)
+                    if not user:
+                        print(f"User not found, user is None.")
+                        return JsonResponse({"success": False})
+                    print('Payment for {} succeeded at amt {}'.format(user, charge['amount']))
+                    print(f"{charge=}")
+                    days_to_add: int = int(charge['metadata']['duration'])
+                    print(f"Adding {days_to_add} of days to user: {user.email}")
+                    user.sub_end_date = add_days(get_future_datetime(user.sub_end_date), days_to_add)
+                    user.save()
+                except Exception as err:
+                    print(f"Error with charge event webhook: ", err)
+                    return JsonResponse({"success": False})
+            elif event['type'] == 'customer.subscription.created':
+                sub = event['data']['object']
+                print(f"Sub event: ", sub)
+                user = get_user_by_customer_id(sub)
                 if not user:
                     print(f"User not found, user is None.")
                     return JsonResponse({"success": False})
-                print('Payment for {} succeeded at amt {}'.format(user, charge['amount']))
-                print(f"{charge=}")
-                days_to_add: int = int(charge['metadata']['duration'])
+                days_to_add: int = int(sub['metadata']['duration'])
                 print(f"Adding {days_to_add} of days to user: {user.email}")
                 user.sub_end_date = add_days(get_future_datetime(user.sub_end_date), days_to_add)
                 user.save()
-            except Exception as err:
-                print(f"Error with charge event webhook: ", err)
-                return JsonResponse({"success": False})
-        elif event['type'] == 'customer.subscription.created':
-            sub = event['data']['object']
-            print(f"Sub event: ", sub)
-            user = get_user_by_customer_id(sub)
-            if not user:
-                print(f"User not found, user is None.")
-                return JsonResponse({"success": False})
-            days_to_add: int = int(sub['metadata']['duration'])
-            print(f"Adding {days_to_add} of days to user: {user.email}")
-            user.sub_end_date = add_days(get_future_datetime(user.sub_end_date), days_to_add)
-            user.save()
+            elif event['type'] == 'invoice.paid':
+                sub = event['data']['object']
+                print(f"Sub event: ", sub)
+                user = get_user_by_customer_id(sub)
+                # Sub event to track when the subscription starts and stops.
+                # "current_period_end": 1689819310,
+                # "current_period_start": 1687227310,
+                # "customer": "cus_O72seMEScSHBAK",
+                if not user:
+                    print(f"User not found, user is None.")
+                    return JsonResponse({"success": False})
+                days_to_add: int = int(sub['metadata']['duration'])
+                print(f"Adding {days_to_add} of days to user: {user.email}")
+                user.sub_end_date = add_days(get_future_datetime(user.sub_end_date), days_to_add)
+                user.save()
 
-        else:
-            # Unexpected event type
-            print('Unhandled event type {}'.format(event['type']))
+            else:
+                # Unexpected event type
+                print('Unhandled event type {}'.format(event['type']))
 
-        return JsonResponse({"success": True})
+            return JsonResponse({"success": True})
+
+        except Exception as err:
+            print(f"Webhook error: ", err)
+        return JsonResponse({"success": False})

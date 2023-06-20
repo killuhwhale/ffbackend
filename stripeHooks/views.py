@@ -80,6 +80,7 @@ class HookViewSet(viewsets.ViewSet):
 
         # Handle the event
         if event and event['type'] == 'charge.succeeded':
+
             try:
                 charge = event['data']['object']
                 user = get_user_by_customer_id(charge)
@@ -95,6 +96,17 @@ class HookViewSet(viewsets.ViewSet):
             except Exception as err:
                 print(f"Error with charge event webhook: ", err)
                 return JsonResponse({"success": False})
+        elif event['type'] == 'customer.subscription.created':
+            sub = event['data']['object']
+            print(f"Sub event: ", sub)
+            user = get_user_by_customer_id(sub)
+            if not user:
+                print(f"User not found, user is None.")
+                return JsonResponse({"success": False})
+            days_to_add: int = int(sub['metadata']['duration'])
+            print(f"Adding {days_to_add} of days to user: {user.email}")
+            user.sub_end_date = add_days(get_future_datetime(user.sub_end_date), days_to_add)
+            user.save()
 
         else:
             # Unexpected event type

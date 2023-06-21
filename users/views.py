@@ -92,28 +92,30 @@ class UserViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'], permission_classes=[permissions.IsAuthenticated], parser_classes=[JSONParser])
     def update_sub(self, request, pk=None):
-        if request.user:
+        '''Deprecated. Sub is updated via webhooks.'''
+        # if request.user:
 
-            subbed = request.data.get("subscribed")
-            sub_end_date = request.data.get("sub_end_date")
-            user = User.objects.get(id=request.user.id)
-            user.subscribed = subbed
-            user.sub_end_date = sub_end_date
-            user.save()
+        #     subbed = request.data.get("subscribed")
+        #     sub_end_date = request.data.get("sub_end_date")
+        #     user = User.objects.get(id=request.user.id)
+        #     user.subscribed = subbed
+        #     user.sub_end_date = sub_end_date
+        #     user.save()
 
-            return Response(UserSerializer(user).data)
+        #     return Response(UserSerializer(user).data)
         return Response({})
 
     @action(detail=False, methods=['post'], permission_classes=[permissions.IsAuthenticated], parser_classes=[JSONParser])
     def update_customer_id(self, request, pk=None):
-        if request.user:
+        """Deprecated. Customer_id is created during registration."""
+        # if request.user:
 
-            customer_id = request.data.get("customer_id")
-            user = User.objects.get(id=request.user.id)
-            user.customer_id = customer_id
-            user.save()
+        #     customer_id = request.data.get("customer_id")
+        #     user = User.objects.get(id=request.user.id)
+        #     user.customer_id = customer_id
+        #     user.save()
 
-            return Response(UserSerializer(user).data)
+        #     return Response(UserSerializer(user).data)
         return Response({})
 
     @action(detail=False, methods=['post'], permission_classes=[permissions.IsAuthenticated])

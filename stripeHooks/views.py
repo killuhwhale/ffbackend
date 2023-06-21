@@ -33,8 +33,9 @@ def get_user_by_customer_id(stripe_obj) -> Union[UserType, None]:
 
 def get_future_datetime(dt: datetime) -> datetime:
     '''Compares the given dt to the current datetime and returns the datetime that is furthest in the future.'''
-    current_dt = datetime.now()
+    current_dt = datetime.now().replace(tzinfo=timezone.utc)
     dt = dt.replace(tzinfo=timezone.utc)
+    print(f"Comparing datetimes {current_dt=} {dt=}")
     if dt > current_dt:
         return dt
 

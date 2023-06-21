@@ -1,7 +1,7 @@
 import logging
 import os
 import stripe
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from django.contrib.auth import get_user_model
 from django.http import JsonResponse
 from rest_framework import viewsets, status
@@ -34,7 +34,7 @@ def get_user_by_customer_id(stripe_obj) -> Union[UserType, None]:
 def get_future_datetime(dt: datetime) -> datetime:
     '''Compares the given dt to the current datetime and returns the datetime that is furthest in the future.'''
     current_dt = datetime.now()
-
+    dt = dt.replace(tzinfo=timezone.utc)
     if dt > current_dt:
         return dt
 
@@ -89,10 +89,13 @@ class HookViewSet(viewsets.ViewSet):
                         return JsonResponse({"success": False})
                     print('Payment for {} succeeded at amt {}'.format(user, charge['amount']))
                     print(f"{charge=}")
-                    days_to_add: int = int(charge['metadata']['duration'])
-                    print(f"Adding {days_to_add} of days to user: {user.email}")
-                    user.sub_end_date = add_days(get_future_datetime(user.sub_end_date), days_to_add)
-                    user.save()
+                    # "object": "charge",
+
+                    if 'duration' in charge['metadata']:
+                        days_to_add: int = int(charge['metadata']['duration'])
+                        print(f"Adding {days_to_add} of days to user: {user.email}")
+                        user.sub_end_date = add_days(get_future_datetime(user.sub_end_date), days_to_add)
+                        user.save()
                 except Exception as err:
                     print(f"Error with charge event webhook: ", err)
                     return JsonResponse({"success": False})

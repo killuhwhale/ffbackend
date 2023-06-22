@@ -29,7 +29,7 @@ class JWTMiddleware:
 
         authorization = request.META.get('HTTP_AUTHORIZATION')
         if not authorization:
-            return JsonResponse({'error': f'Authorization header is missing {request.path}'}, status=401)
+            return JsonResponse({'error': f'Authorization header is missing {request.path=}'}, status=401)
 
         try:
             access_token = authorization.split(' ')[1]

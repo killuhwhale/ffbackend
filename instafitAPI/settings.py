@@ -230,6 +230,7 @@ elif os.getenv("USER") == "DigOc" and len(sys.argv) > 1 and sys.argv[1] != 'coll
     }
     BASE_URL = 'https://starfish-app-r4hzq.ondigitalocean.app'
 
+print(f"using {BASE_URL=}")
 # Password validation
 # https://docs.djangoproject.com/en/4.0/ref/settings/#auth-password-validators
 

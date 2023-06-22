@@ -66,6 +66,7 @@ ALLOWED_HOSTS = cenv("DJANGO_ALLOWED_HOSTS",
 
 FILE_UPLOAD_MAX_MEMORY_SIZE = 5242880 * 2
 
+print(f"{ALLOWED_HOSTS=}")
 
 # https://django-rest-framework-simplejwt.readthedocs.io/en/latest/settings.html#settings
 # JWT_KEY = env('JWT_SIGNING_KEY') if os.getenv("USER") == "killuh" else os.getenv("JWT_SIGNING_KEY", "")
@@ -216,10 +217,10 @@ elif os.getenv("USER") == "killuh" or os.getenv("USER") == "chrisandaya":
     BASE_URL = "http://localhost:8000"
 
 elif os.getenv("USER") == "DigOc" and len(sys.argv) > 1 and sys.argv[1] != 'collectstatic':  # Need this collectstatic check to avoid erros during build step in DigitalOcean
-    if os.getenv("DATABASE_URL", None) is None:
+    if cenv("DATABASE_URL", None) is None:
         raise Exception("DATABASE_URL environment variable not defined")
     DATABASES = {
-        "default": dj_database_url.parse(os.environ.get("DATABASE_URL")),
+        "default": dj_database_url.parse(cenv("DATABASE_URL")),
     }
     BASE_URL = 'https://starfish-app-r4hzq.ondigitalocean.app'
 elif os.getenv("USER") == "DigOc" and len(sys.argv) > 1 and sys.argv[1] != 'collectstatic':  # Need this collectstatic check to avoid erros during build step in DigitalOcean

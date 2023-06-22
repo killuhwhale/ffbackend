@@ -15,6 +15,9 @@ class JWTMiddleware:
     def __call__(self, request):
         logger.critical(f"middleware req: {request.method=}, {request.path=} ")
         # Allow requests to endpoints without auth token
+        if request.path == "/":
+            return JsonResponse({'data': f'Hello world {request.path}'}, status=200)
+
         if request.path in ['/hooks/webhook/', '/login/', '/register/', '/token/', '/token/refresh/', '/users/', '/user/send_reset_code/', '/user/reset_password/', '/emailvalidation/confirm_email/', '/emailvalidation/send_confirmation_email']:
             if request.path == "/users/" and not request.method == "POST":
                 print("Needs access token... go along and procedd")

@@ -33,6 +33,7 @@ env = environ.Env(
     DEV_DB_NAME=(str, ""),
     DEV_DB_USER=(str, ""),
     DEV_DB_PASS=(str, ""),
+    DJANGO_ALLOWED_HOSTS=(str, "127.0.0.1,localhost"),
 )
 
 environ.Env.read_env()

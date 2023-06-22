@@ -34,6 +34,7 @@ env = environ.Env(
     DEV_DB_USER=(str, ""),
     DEV_DB_PASS=(str, ""),
     DJANGO_ALLOWED_HOSTS=(str, "127.0.0.1,localhost"),
+    RUN_ENV=(str, "dev"),
 )
 
 environ.Env.read_env()
@@ -173,7 +174,15 @@ print(f"Env user: ", os.getenv("USER"))
 print(f"Args: ", sys.argv)
 BASE_URL = ""
 # Todo Add spot for production when deployed w/ docker.
-if os.getenv("USER") == "localdocker":
+
+if os.getenv("USER") == "killuh" and len(sys.argv) > 1 and sys.argv[1] != 'collectstatic' and cenv("RUN_ENV") == "production":  # Need this collectstatic check to avoid erros during build step in DigitalOcean
+    if os.getenv("DATABASE_URL", None) is None:
+        raise Exception("DATABASE_URL environment variable not defined")
+    DATABASES = {
+        "default": dj_database_url.parse(os.environ.get("DATABASE_URL")),
+    }
+    BASE_URL = 'https://fittrackrr.com/api'
+elif os.getenv("USER") == "localdocker":
     DATABASES = {
         "default":  {
             'ENGINE': 'django.db.backends.postgresql_psycopg2',
@@ -206,6 +215,13 @@ elif os.getenv("USER") == "killuh" or os.getenv("USER") == "chrisandaya":
     }
     BASE_URL = "http://localhost:8000"
 
+elif os.getenv("USER") == "DigOc" and len(sys.argv) > 1 and sys.argv[1] != 'collectstatic':  # Need this collectstatic check to avoid erros during build step in DigitalOcean
+    if os.getenv("DATABASE_URL", None) is None:
+        raise Exception("DATABASE_URL environment variable not defined")
+    DATABASES = {
+        "default": dj_database_url.parse(os.environ.get("DATABASE_URL")),
+    }
+    BASE_URL = 'https://starfish-app-r4hzq.ondigitalocean.app'
 elif os.getenv("USER") == "DigOc" and len(sys.argv) > 1 and sys.argv[1] != 'collectstatic':  # Need this collectstatic check to avoid erros during build step in DigitalOcean
     if os.getenv("DATABASE_URL", None) is None:
         raise Exception("DATABASE_URL environment variable not defined")

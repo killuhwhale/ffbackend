@@ -18,6 +18,7 @@ from datetime import timedelta
 from pathlib import Path
 import dj_database_url
 
+# from rest_framework_simplejwt.authentication import JWTAuthentication
 env = environ.Env(
     # set casting, default value
     DEBUG=(bool, False),
@@ -36,8 +37,16 @@ env = environ.Env(
 
 environ.Env.read_env()
 
-DEVELOPMENT_MODE = os.getenv("DEVELOPMENT_MODE", "False") == "True"
-DEBUG = os.getenv("DEBUG", "False") == "True" or env('DEBUG') == "True"
+def cenv(key, d=None):
+    """Combined  environments."""
+    if key in env:
+        return env(key)
+    return os.getenv(key, d)
+
+print(cenv("DEVELOPMENT_MODE", "False"))
+DEVELOPMENT_MODE = cenv("DEVELOPMENT_MODE", "False")
+DEBUG = not cenv("USER", "False") == "DigOc"
+print(f"Settings {DEBUG=} {os.getenv('USER')=}")
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -50,13 +59,15 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = get_random_secret_key()
 
 # ALLOWED_HOSTS = ["10.0.2.2", 'localhost', '127.0.0.1', '192.168.0.159']
-ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS",
+ALLOWED_HOSTS = cenv("DJANGO_ALLOWED_HOSTS",
                           "127.0.0.1,localhost").split(",")
 
 FILE_UPLOAD_MAX_MEMORY_SIZE = 5242880 * 2
 
 
 # https://django-rest-framework-simplejwt.readthedocs.io/en/latest/settings.html#settings
+# JWT_KEY = env('JWT_SIGNING_KEY') if os.getenv("USER") == "killuh" else os.getenv("JWT_SIGNING_KEY", "")
+JWT_KEY = cenv('JWT_SIGNING_KEY')
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(days=10),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=30),
@@ -65,7 +76,7 @@ SIMPLE_JWT = {
     'UPDATE_LAST_LOGIN': False,
 
     'ALGORITHM': 'HS256',
-    'SIGNING_KEY': env('JWT_SIGNING_KEY') if os.getenv("USER") == "killuh" else os.getenv("JWT_SIGNING_KEY", ""),
+    'SIGNING_KEY': JWT_KEY,
     'VERIFYING_KEY': None,
     'AUDIENCE': None,
     'ISSUER': None,
@@ -94,7 +105,6 @@ SIMPLE_JWT = {
 INSTALLED_APPS = [
     'rest_framework',
     'rest_framework.authtoken',
-
     # 'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -103,8 +113,12 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'storages',
     'users.apps.UsersConfig',
+    'stripeHooks.apps.StripehooksConfig',
     'gyms',
 ]
+# SECURE_SSL_REDIRECT = 0 if DEBUG else 1
+# CSRF_COOKIE_SECURE = 0 if DEBUG else 1
+# SECURE_HSTS_SECONDS = 60 * 60 * 24 * 1
 
 AUTH_USER_MODEL = 'users.User'
 
@@ -122,6 +136,8 @@ MIDDLEWARE = [
     # 'django.contrib.auth.middleware.AuthenticationMiddleware',
     # 'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'instafitAPI.middleware.JWTMiddleware',
+    'instafitAPI.middleware.LogMiddleware',
 ]
 AUTHENTICATION_BACKENDS = {
     'users.authBackend.EmailAuth'
@@ -150,40 +166,25 @@ WSGI_APPLICATION = 'instafitAPI.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/4.0/ref/settings/#databases
 
-'''
-    https://medium.com/coding-blocks/creating-user-database-and-adding-access-on-postgresql-8bfcd2f4a91e
-    sudo -u postgres psql
-    postgres=# create database mydb;
-    postgres=# create user myuser with encrypted password 'mypass';
-    postgres=# grant all privileges on database mydb to myuser;
 
 
-    alter user gym_admin with encrypted password 'mostdope';
-    create user gym_admin with encrypted password 'mostdope';
-    create database instafit_master;
-    grant all privileges on database instafit_master to gym_admin;
-
-
-    ./manage.py makemigrations users
-    ./manage.py makemigrations gyms
-    ./manage.py migrate users
-    ./manage.py migrate gyms
-    ./manage.py migrate
-'''
-
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.postgresql_psycopg2',
-#         'NAME': env('DEV_DB_NAME'),
-#         'USER': env('DEV_DB_USER'),
-#         'PASSWORD':  env('DEV_DB_PASS'),
-#         'HOST': '127.0.0.1',
-#         'PORT': '5432',
-#     }
-# }
-
-
-if os.getenv("USER") == "killuh" or os.getenv("USER") == "chrisandaya":
+print(f"Env user: ", os.getenv("USER"))
+print(f"Args: ", sys.argv)
+BASE_URL = ""
+# Todo Add spot for production when deployed w/ docker.
+if os.getenv("USER") == "localdocker":
+    DATABASES = {
+        "default":  {
+            'ENGINE': 'django.db.backends.postgresql_psycopg2',
+            'NAME': env('POSTGRES_NAME'),
+            'USER': env('POSTGRES_USER'),
+            'PASSWORD':  env('POSTGRES_PASSWORD'),
+            'HOST': 'db',
+            'PORT': '5432',
+        }
+    }
+    BASE_URL = "http://localhost:8000"
+elif os.getenv("USER") == "killuh" or os.getenv("USER") == "chrisandaya":
     DATABASES = {
         "default":  {
             'ENGINE': 'django.db.backends.postgresql_psycopg2',
@@ -192,14 +193,25 @@ if os.getenv("USER") == "killuh" or os.getenv("USER") == "chrisandaya":
             'PASSWORD':  env('DEV_DB_PASS'),
             'HOST': '127.0.0.1',
             'PORT': '5432',
+        },
+        "test": {
+            'ENGINE': 'django.db.backends.postgresql_psycopg2',
+            'NAME': env('DEV_TEST_DB_NAME'),
+            'USER': env('DEV_TEST_DB_USER'),
+            'PASSWORD':  env('DEV_TEST_DB_PASS'),
+            'HOST': '127.0.0.1',
+            'PORT': '5432',
         }
     }
-elif len(sys.argv) == 0 or (len(sys.argv) > 1 and sys.argv[1] != 'collectstatic'):
+    BASE_URL = "http://localhost:8000"
+
+elif os.getenv("USER") == "DigOc" and len(sys.argv) > 1 and sys.argv[1] != 'collectstatic':  # Need this collectstatic check to avoid erros during build step in DigitalOcean
     if os.getenv("DATABASE_URL", None) is None:
         raise Exception("DATABASE_URL environment variable not defined")
     DATABASES = {
         "default": dj_database_url.parse(os.environ.get("DATABASE_URL")),
     }
+    BASE_URL = 'https://starfish-app-r4hzq.ondigitalocean.app'
 
 # Password validation
 # https://docs.djangoproject.com/en/4.0/ref/settings/#auth-password-validators

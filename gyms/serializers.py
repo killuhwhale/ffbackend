@@ -169,12 +169,18 @@ class WorkoutGroupsNoWorkoutsSerializer(serializers.ModelSerializer):
 class WorkoutGroupsSerializer(serializers.ModelSerializer):
     workouts = WorkoutSerializer(
         source="workouts_set", many=True, required=False)
-
+    user_owner_id = serializers.SerializerMethodField('users_owner_id')
     completed = serializers.SerializerMethodField('has_completed')
 
+    def users_owner_id(self, workout_group):
+        '''
+            Adds field 'user_owner_id' to the Workoutgroup result in order to
+             determine which user ID is the owner of the workout group when the
+             WorkoutGroup is created under a class.
+        '''
+        return workout_group.owner_id if not workout_group.owned_by_class else GymClasses.objects.get(id=workout_group.owner_id).gym.owner_id
+
     def has_completed(self, workout_group):
-        print("Has completed: (WorkoutGroupsSerializer)",
-              workout_group,  self.context)
 
         return CompletedWorkoutGroups.objects.filter(
             workout_group_id=workout_group.id,
@@ -198,7 +204,6 @@ class WorkoutGroupsHasCompletedSerializer(serializers.ModelSerializer):
     completed = serializers.SerializerMethodField('has_completed')
 
     def has_completed(self, workout_group):
-        print("Has completed: ", workout_group.id,  self.context)
 
         return CompletedWorkoutGroups.objects.filter(
             workout_group_id=workout_group.id,
@@ -224,11 +229,6 @@ class WorkoutGroupsAutoCompletedSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
-class CombinedWorkoutGroupsSerializer(serializers.Serializer):
-    created_workout_groups = WorkoutGroupsSerializer(many=True, required=False)
-    completed_workout_groups = CompletedWorkoutGroupsSerializer(
-        many=True, required=False)
-
 
 class CombinedWorkoutsSerializer(serializers.Serializer):
     '''
@@ -244,7 +244,7 @@ class CombinedWorkoutsSerializer(serializers.Serializer):
 
 class CombinedWorkoutGroupsAsWorkoutGroupsSerializer(serializers.Serializer):
     '''
-        Used to serialized all workouts for a user between their own created 
+        Used to serialized all workouts for a user between their own created
             and Completed workouts.
     '''
     workout_groups = serializers.SerializerMethodField()

@@ -1,8 +1,7 @@
-from enum import unique
 from django.db import models
+from django.core.exceptions import ValidationError
+from functools import wraps
 
-
-# Create your models here.
 
 
 class Gyms(models.Model):
@@ -13,6 +12,8 @@ class Gyms(models.Model):
 
     class Meta:
         unique_together = [["title", "owner_id"]]
+
+
 
 
 class GymClasses(models.Model):
@@ -116,26 +117,24 @@ class WorkoutItems(models.Model):
     workout = models.ForeignKey(Workouts, on_delete=models.CASCADE)
     name = models.ForeignKey(
         WorkoutNames, on_delete=models.CASCADE)                # Squat
-    ssid = models.IntegerField(default=-1, blank=True)
-    constant = models.BooleanField(default=False, blank=True) # For Reps based workout, quantity is constant
+    ssid = models.IntegerField(default=-1, blank=True) # superset id, groups items together
+    constant = models.BooleanField(default=False, blank=True) # For Reps based workout, quantity can be constant
     # removed:   intensity, rounds
-    sets = models.IntegerField(default=0)                      # 3
-    reps = models.CharField(max_length=140, default="[0]")       # 5
-    duration = models.CharField(max_length=140, default="[0]")   # None
-    duration_unit = models.IntegerField(default=0)             # None
+    sets = models.IntegerField(default=0)
+    reps = models.CharField(max_length=140, default="[0]")
+    pause_duration = models.FloatField(default=0.00)
+    duration = models.CharField(max_length=140, default="[0]")
+    duration_unit = models.IntegerField(default=0)
     distance = models.CharField(max_length=140, default="[0]")
     distance_unit = models.IntegerField(default=0)
     weights = models.CharField(
-        max_length=400, default="[]")   # [100, 155, 185]
-    weight_unit = models.CharField(max_length=2, default='kg')  # None
-    rest_duration = models.FloatField(default=0.0)                  # None
-    rest_duration_unit = models.IntegerField(default=0)             # None
-    percent_of = models.CharField(max_length=20, default='')  # None
-    order = models.IntegerField()             # None
+        max_length=400, default="[]")
+    weight_unit = models.CharField(max_length=2, default='kg')
+    rest_duration = models.FloatField(default=0.0)
+    rest_duration_unit = models.IntegerField(default=0)
+    percent_of = models.CharField(max_length=20, default='')
+    order = models.IntegerField()  # order added by user.
     date = models.DateTimeField(auto_now_add=True)
-
-# from gyms.models import *
-# CompletedWorkoutGroups.objects.all().delete()
 
 
 class CompletedWorkoutGroups(models.Model):
@@ -181,6 +180,8 @@ class CompletedWorkoutItems(models.Model):
     # removed:   intensity, rounds
     sets = models.IntegerField(default=0)                      # 3
     reps = models.CharField(max_length=140, default="0")       # 5
+    pause_duration = models.FloatField(default=0.00)
+
     duration = models.CharField(max_length=140, default="0")   # None
     duration_unit = models.IntegerField(default=0)             # None
     distance = models.CharField(max_length=140, default="0")

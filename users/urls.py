@@ -11,6 +11,8 @@ router = routers.DefaultRouter()
 router.register(r'users', user_views.UserViewSet)
 router.register(r'user', user_views.ResetPasswordEmailViewSet,
                 basename='resetPassword')
+router.register(r'emailvalidation', user_views.ConfirmEmailViewSet,
+                basename='resetPassword')
 router.register(r'groups', user_views.GroupViewSet)
 
 # Wire up our API using automatic URL routing.

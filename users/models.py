@@ -32,7 +32,7 @@ configuration.api_key['api-key'] = env('SENDINBLUE_KEY')
 
 class UserManager(BaseUserManager):
     use_in_migrations = True
-    TESTING = not get_env("RUN_ENV") == "dev"
+    TESTING = get_env("RUN_ENV") == "dev"
     logger.critical(f"{TESTING=}")
 
     def send_confirmation_email(self, email):

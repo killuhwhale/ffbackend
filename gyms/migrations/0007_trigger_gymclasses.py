@@ -9,7 +9,7 @@ class Migration(migrations.Migration):
                 BEFORE INSERT ON gyms_gymclasses
                 FOR EACH ROW
                 WHEN (NEW.gym_id IS NOT NULL)
-                EXECUTE FUNCTION check_gymclasses_count('3', 'gyms_gymclasses');
+                EXECUTE FUNCTION check_gymclasses_count('15', 'gyms_gymclasses');
     """
     dependencies = [
         ('gyms', '0006_func_gymclasses'),

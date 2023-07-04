@@ -9,7 +9,7 @@ class Migration(migrations.Migration):
                 BEFORE INSERT ON gyms_workoutgroups
                 FOR EACH ROW
                 WHEN (NEW.owner_id IS NOT NULL)
-                EXECUTE FUNCTION check_workoutgroups_count('1', 'gyms_workoutgroups');
+                EXECUTE FUNCTION check_workoutgroups_count('15', 'gyms_workoutgroups');
     """
 
     dependencies = [

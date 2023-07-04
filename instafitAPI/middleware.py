@@ -1,11 +1,30 @@
-from django.http import JsonResponse
-from jwt import decode, ExpiredSignatureError
 from django.contrib.auth import get_user_model
+from django.contrib.gis.geoip2 import GeoIP2
+from django.http import JsonResponse
+import pytz
 from instafitAPI.settings  import JWT_KEY
-User =  get_user_model()
+from jwt import decode, ExpiredSignatureError
+from pytz import timezone
 import logging
 
+User =  get_user_model()
 logger = logging.getLogger(__name__)
+
+
+def get_user_timezone(request):
+    g = GeoIP2()
+    user_ip = request.META.get('REMOTE_ADDR')
+    print('get_user_timezone', user_ip)
+    if user_ip:
+        try:
+            # Get the user's timezone based on their IP address
+            user_timezone = g.city(user_ip)['time_zone']
+            print(f"user_timezone: {user_timezone=}")
+            return user_timezone
+        except:
+            pass
+    return "US/Pacific"
+
 
 
 class JWTMiddleware:
@@ -41,6 +60,23 @@ class JWTMiddleware:
 
         response = self.get_response(request)
         return response
+
+
+class TzMiddleware:
+    ''' Adds Timezone to user. '''
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        # logger.critical(f"middleware req: {request=} {request.method=}, {request.path=} ")
+        tz = get_user_timezone(request)
+        print("TZMiddleware: ", tz)
+        if tz is not None:
+            request.tz = tz
+
+        response = self.get_response(request)
+        return response
+
 
 
 class LogMiddleware:

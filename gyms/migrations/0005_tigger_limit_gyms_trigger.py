@@ -9,7 +9,7 @@ class Migration(migrations.Migration):
                 BEFORE INSERT ON gyms_gyms
                 FOR EACH ROW
                 WHEN (NEW.owner_id IS NOT NULL)
-                EXECUTE FUNCTION check_gym_count('3', 'gyms_gyms');
+                EXECUTE FUNCTION check_gym_count('15', 'gyms_gyms');
     """
     dependencies = [
         ('gyms', '0004_tigger_limit_gyms'),

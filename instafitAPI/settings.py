@@ -140,6 +140,7 @@ MIDDLEWARE = [
     # 'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'instafitAPI.middleware.JWTMiddleware',
+    'instafitAPI.middleware.TzMiddleware',
     'instafitAPI.middleware.LogMiddleware',
 ]
 AUTHENTICATION_BACKENDS = {
@@ -277,7 +278,8 @@ TIME_ZONE = 'UTC'
 USE_I18N = True
 
 USE_TZ = True
-
+GEOIP_PATH = f'{BASE_DIR}/instafitAPI/GeoLite2-City.mmdb'
+print("GEOIP_PATH ", GEOIP_PATH)
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.0/howto/static-files/

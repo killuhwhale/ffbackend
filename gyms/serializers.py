@@ -372,6 +372,7 @@ class UserSerializer(serializers.Serializer):
     username = serializers.CharField()
     email = serializers.CharField(required=False)
     id = serializers.IntegerField()
+    sub_end_date = serializers.DateTimeField()
 
 
 class UserWithoutEmailSerializer(serializers.Serializer):

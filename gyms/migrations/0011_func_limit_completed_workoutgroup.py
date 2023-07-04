@@ -10,7 +10,7 @@ class Migration(migrations.Migration):
                 BEFORE INSERT ON gyms_completedworkoutgroups
                 FOR EACH ROW
                 WHEN (NEW.user_id IS NOT NULL)
-                EXECUTE FUNCTION check_completed_workoutgroups_count('1', 'gyms_completedworkoutgroups');
+                EXECUTE FUNCTION check_completed_workoutgroups_count('15', 'gyms_completedworkoutgroups');
     """
     dependencies = [
         ('gyms', '0010_tigger_limit_completed_workoutgroup'),

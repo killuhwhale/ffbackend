@@ -1,5 +1,6 @@
-from datetime import datetime, time, timedelta
+from datetime import datetime, time, timedelta, timezone
 from enum import Enum
+from django.db import transaction
 from django.db.utils import InternalError
 import environ
 from django.core.serializers import serialize
@@ -33,11 +34,15 @@ from PIL import Image
 from django.contrib.auth import get_user_model
 from itertools import chain
 
+
 tz = pytz.timezone("US/Pacific")
 s3_client = s3Client()
 env = environ.Env()
 environ.Env.read_env()
 User = get_user_model()
+
+# When determining membership status give extra days.
+MEMBERSHIP_LEEWAY = 0
 
 GYM_FILES = 0
 CLASS_FILES = 1
@@ -62,7 +67,15 @@ def is_gymclass_coach(user, gym_class):
 def is_gym_class_owner(user, gym_class):
     return user and gym_class and str(user.id) == str(gym_class.gym.owner_id)
 
+def is_member(user):
+    """ Given a user return True if the user's sub_end_date is greater than two-days ago (leeway) """
+    leeway = MEMBERSHIP_LEEWAY  # Number of days of leeway
 
+    # Calculate the date two days ago
+    two_days_ago = datetime.today() - timedelta(days=leeway)
+
+    # Check if the user's sub_end_date is greater than two days ago
+    return user.sub_end_date.replace(tzinfo=timezone.utc) > two_days_ago.replace(tzinfo=timezone.utc)
 
 class ResponseError(Enum):
     GENERIC_ERROR = 0
@@ -167,10 +180,13 @@ class GymPermission(BasePermission):
             # Check permissions for read-only request
             return True
         elif request.method == "POST" and view.action == "create":
-            return True
+            return is_member(request.user)
         elif request.method == "DELETE":
-            print("Deleting gym!!!!!!!!!!")
             gym_id = view.kwargs['pk']
+            print("Deleting gym!!!!!!!!!!", gym_id, is_gym_owner(request.user, gym_id))
+
+            gym = Gyms.objects.get(id=gym_id)
+            print("Gym: ", gym)
             return is_gym_owner(request.user, gym_id)
         return False
 
@@ -188,7 +204,7 @@ class GymClassPermission(BasePermission):
             return is_gym_owner(
                 request.user,
                 request.data.get("gym")
-            )
+            ) and is_member(request.user)
         elif request.method == "DELETE":
             gym_class_id = view.kwargs['pk']
             return is_gym_class_owner(request.user, GymClasses.objects.get(id=gym_class_id))
@@ -205,6 +221,7 @@ class CoachPermission(BasePermission):
         elif request.method in SAFE_METHODS:
             return True
         elif request.method == "POST" and view.action == "create":
+
             gym_class_id = request.data.get("gym_class", 0)
             if not gym_class_id:
                 return Response(to_err("Error finding gym_class id"))
@@ -212,7 +229,7 @@ class CoachPermission(BasePermission):
             user = request.user
             gym_class: GymClasses = GymClasses.objects.get(id=gym_class_id)
             owner_id = gym_class.gym.owner_id
-            return str(owner_id) == str(user.id)
+            return str(owner_id) == str(user.id) and is_member(request.user)
         elif request.method == "DELETE":
             if not request.resolver_match.url_name == 'coaches-remove':
                 return False
@@ -240,7 +257,7 @@ class MemberPermission(BasePermission):
                 return Response(to_err("Error finding gym_class id"))
 
             gym_class: GymClasses = GymClasses.objects.get(id=gym_class_id)
-            return is_gym_owner(request.user, gym_class.gym.id) or is_gymclass_coach(request.user, gym_class)
+            return (is_gym_owner(request.user, gym_class.gym.id) or is_gymclass_coach(request.user, gym_class)) and is_member(request.user)
         elif request.method == "DELETE":
             if not request.resolver_match.url_name == 'classmembers-remove':
                 return False
@@ -311,6 +328,27 @@ class SuperUserWritePermission(BasePermission):
             return request.user.is_superuser
         return False
 
+
+def check_users_workouts_and_completed_today(request):
+    # Check for a workoutGroup created today by user. If no workout, return True allow create
+    user = request.user
+    tz = request.tz
+    today = datetime.now( pytz.timezone(tz)).date()
+    workoutGroups = WorkoutGroups.objects.filter(
+        owner_id=user.id,
+        owned_by_class=False,
+        date__date=today
+    )
+
+    if len(workoutGroups) > 0:
+        return False
+
+    completedWorkoutGroups = CompletedWorkoutGroups.objects.filter(
+        user_id=user.id,
+        date__date=today
+    )
+    return len(completedWorkoutGroups) == 0 # Allow if nothing is created today
+
 class WorkoutGroupsPermission(BasePermission):
     message = """Only users can create/delete workouts for themselves or
                 for a class they own or are a coach of."""
@@ -322,19 +360,29 @@ class WorkoutGroupsPermission(BasePermission):
             # Check permissions for read-only request
             return True
         elif request.method == "POST" and view.action == "create":
-            res = not jbool(request.data.get("owned_by_class")) and \
-                str(request.user.id) == str(request.data.get("owner_id"))
+            '''
+                A user can create workouts if they are members.
+                If a user is not a member:
+                    - Workouts for classes cannot be created.
+                    - Workouts for users can only be created once per day including Completed Workouts
+            '''
+            user_is_member = is_member(request.user)
 
             if jbool(request.data.get("owned_by_class")):
-                # Verify user is owner or coach of class
+                # Verify user is owner or coach of class and is a member
                 gym_class = GymClasses.objects.get(
                     id=request.data.get("owner_id"))
                 print("Checking wg perm for class: ", is_gym_owner(
                     request.user, gym_class.gym.id) or is_gymclass_coach(request.user, gym_class))
-                return is_gym_owner(request.user, gym_class.gym.id) or is_gymclass_coach(request.user, gym_class)
+                return (is_gym_owner(request.user, gym_class.gym.id) or is_gymclass_coach(request.user, gym_class)) and user_is_member
 
-            return not jbool(request.data.get("owned_by_class")) and \
-                str(request.user.id) == str(request.data.get("owner_id"))
+            # user can only add 1 workout per day if they are not a member.
+            if user_is_member:
+                return not jbool(request.data.get("owned_by_class")) and \
+                    str(request.user.id) == str(request.data.get("owner_id"))
+            else:
+                return check_users_workouts_and_completed_today(request)
+
 
         elif request.method == "DELETE":
             # If owned_by_class
@@ -420,7 +468,13 @@ class CompletedWorkoutGroupsPermission(BasePermission):
             return True
         elif request.method == "POST" and view.action == "create":
             # API will create the CompletedWorkoutGroup for the requesting user.
-            return True
+            if is_member(request.user):
+                print("Completed perms: is member")
+                return True
+            else:
+                print("Completed perms: checking nnon members")
+                return check_users_workouts_and_completed_today(request)
+
         elif request.method == "DELETE":
             comp_workout_group_id = view.kwargs['pk']
             comp_workout_group = CompletedWorkoutGroups.objects.get(id=comp_workout_group_id)
@@ -467,6 +521,63 @@ class DestroyWithPayloadMixin(object):
 ########################################################
 #   ////////////////////////////////////////////////   #
 ########################################################
+
+
+
+""" - Gym Removal
+    1. Get all classes
+    2. For ea class, mark wodGroups as archived.
+    3. Remove all Coaches, members  and favorites
+    4. Delete each class
+    5. Delete gym
+
+    - GymClass Removal
+    1. Mark wodGroups as archived.
+    2. Remove all Coaches, members  and favorites
+    3. Delete each class
+    4. Delete gym
+
+    def remove_gym():
+        for gclass in gymClasses:
+            remove_gym_class(gclass)
+        gym.delete()
+
+    def remove_gym_class(gymClass):
+        # Steps 1-4
+"""
+
+# def remove_gym_class(gym_class: GymClasses):
+#     try:
+#         workout_groups = WorkoutGroups.objects.filter(owned_by_class=True, owner_id=gym_class.id)
+#         for wg in workout_groups:
+#             wg.archived = True
+#         WorkoutGroups.objects.bulk_update(workout_groups, ["archived"])
+
+#         GymClassFavorites.objects.filter(gym_class=gym_class).delete()
+#         Coaches.objects.filter(gym_class=gym_class).delete()
+#         ClassMembers.objects.filter(gym_class=gym_class).delete()
+#         gym_class.delete()
+#         return True
+#     except Exception as err:
+#         print(f"Error removing gym class: ", err)
+#     return False
+
+# @transaction.atomic
+# def remove_gym(gym: Gyms):
+#     with transaction.atomic():
+#         gym_classes = gym.gymclasses_set.all()
+#         for gc in gym_classes:
+#             remove_gym_class(gc)
+
+#         GymFavorites.objects.filter(gym=gym).delete()
+#         transaction.commit()
+#         return True
+#     # except Exception as err:
+#     #     print(f"Error removing gym: ", err)
+#     return False
+
+
+
 
 
 class GymViewSet(DestroyWithPayloadMixin, viewsets.ModelViewSet, GymPermission):
@@ -600,6 +711,15 @@ class GymViewSet(DestroyWithPayloadMixin, viewsets.ModelViewSet, GymPermission):
             return GymSerializerWithoutClasses
         return GymSerializer
 
+    def get_queryset(self):
+        '''Affects destroy!'''
+        if self.request.method == "DELETE":
+            return super().get_queryset()
+
+        # Apply any filtering or ordering here
+        queryset = super().get_queryset().order_by('title')  # Need to order by rating... and need to add rating
+        queryset = queryset[:40]
+        return queryset
 
 class GymClassViewSet(DestroyWithPayloadMixin, viewsets.ModelViewSet, GymClassPermission):
     permission_classes = [GymClassPermission]
@@ -759,7 +879,15 @@ class GymClassViewSet(DestroyWithPayloadMixin, viewsets.ModelViewSet, GymClassPe
 
         return Response(to_data("Successfully added media to gym class."))
 
+    def get_queryset(self):
+        '''Affects destroy!'''
+        if self.request.method == "DELETE":
+            return super().get_queryset()
 
+        # Apply any filtering or ordering here
+        queryset = super().get_queryset().order_by('date')  # Need to order by rating... and need to add rating
+        queryset = queryset[:40]
+        return queryset
 
 ########################################################
 #   ////////////////////////////////////////////////   #
@@ -972,6 +1100,16 @@ class WorkoutGroupsViewSet(viewsets.ModelViewSet, WorkoutGroupsPermission):
         # workout_group.save() # This resavess the object and doesnt dlete it.
         return Response(to_data('Deleted WorkoutGroup'))
 
+
+    def get_queryset(self):
+        '''Affects destroy!'''
+        if self.request.method == "DELETE":
+            return super().get_queryset()
+
+        # Apply any filtering or ordering here
+        queryset = super().get_queryset().order_by('for_date')  # Need to order by rating... and need to add rating
+        queryset = queryset[:40]
+        return queryset
 
 class WorkoutsViewSet(DestroyWithPayloadMixin, viewsets.ModelViewSet, WorkoutPermission):
     """

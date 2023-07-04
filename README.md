@@ -5,6 +5,28 @@ sudo -u postgres psql -U gym_admin -d instafit_master -h 127.0.0.1
 
 stripe listen --forward-to localhost:8000/hooks/webhook/
 
+ssh killuh@164.92.104.164
+
+# TODO()
+- Update live db with new so reset the database and restart...
+- Update both sites on Prod
+
+
+I thinkwe are good
+we have limits on get queries
+we have abuse limits
+we have differing limits based on user is member or not
+we have permission.
+
+
+We need ads....
+
+
+
+
+# Droplet
+https://www.digitalocean.com/community/tutorials/how-to-set-up-django-with-postgres-nginx-and-gunicorn-on-ubuntu-20-04
+
 
 # Set up local database (Using Docker is much better...)
     https://medium.com/coding-blocks/creating-user-database-and-adding-access-on-postgresql-8bfcd2f4a91e
@@ -25,11 +47,11 @@ stripe listen --forward-to localhost:8000/hooks/webhook/
     ./manage.py migrate
 
 
-# Limits
-- Gyms 3
-- GymClasses 3
-- WorkoutGroups 1
-- CompletedWorkoutGroups 1
+# Abuse Limits -> Enforeced Trigger DB
+- Gyms 15 max total
+- GymClasses 15 per gym total
+- WorkoutGroups 15 per day
+- CompletedWorkoutGroups 15 per day
 
 # Docker Usage
 ## Prod
@@ -214,7 +236,23 @@ https://developers.google.com/identity/one-tap/android/idtoken-auth
 
 
 # Todo
-PASSWORD RETUREND WHEN REGISTERING SHOULDNT
+
+- Change incentive to purchase a membership
+    - Currently there are no restrictions aside from daily limits.
+    - How should I actually incentivize?
+        - Trial vs Membership
+            - Trial can only:
+                - Complete or Create 3 workouts per week
+                - Cannot create gyms
+            - Members can:
+                - Create Gym (limit 15)
+                    - Add users to manage classes/ enable personal trainers
+                    - Create private classes limit(15 classes per gym)
+
+        - Ads
+            - Ads for non members
+
+~ PASSWORD RETUREND WHEN REGISTERING SHOULDNT
 
 Required Features:
     √ iOs and Android

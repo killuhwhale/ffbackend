@@ -47,7 +47,7 @@ def cenv(key, d=None):
 
 print(cenv("DEVELOPMENT_MODE", "False"))
 DEVELOPMENT_MODE = cenv("DEVELOPMENT_MODE", "False")
-DEBUG = not cenv("USER", "False") == "DigOc"
+DEBUG =  cenv("RUN_ENV", "False") == "dev"
 print(f"Settings {DEBUG=} {os.getenv('USER')=}")
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -175,13 +175,12 @@ WSGI_APPLICATION = 'instafitAPI.wsgi.application'
 print(f"Env user: ", os.getenv("USER"))
 print(f"Args: ", sys.argv)
 BASE_URL = ""
-# Todo Add spot for production when deployed w/ docker.
 
 if os.getenv("USER") == "killuh" and len(sys.argv) > 1 and sys.argv[1] != 'collectstatic' and cenv("RUN_ENV") == "production":  # Need this collectstatic check to avoid erros during build step in DigitalOcean
     if os.getenv("DATABASE_URL", None) is None:
         raise Exception("DATABASE_URL environment variable not defined")
     DATABASES = {
-        "default": dj_database_url.parse(os.environ.get("DATABASE_URL")),
+        "default": dj_database_url.parse(cenv("DATABASE_URL")),
     }
     BASE_URL = 'https://fittrackrr.com/api'
 elif os.getenv("USER") == "localdocker":
@@ -216,21 +215,6 @@ elif os.getenv("USER") == "killuh" or os.getenv("USER") == "chrisandaya":
         }
     }
     BASE_URL = "http://localhost:8000"
-
-elif os.getenv("USER") == "DigOc" and len(sys.argv) > 1 and sys.argv[1] != 'collectstatic':  # Need this collectstatic check to avoid erros during build step in DigitalOcean
-    if cenv("DATABASE_URL", None) is None:
-        raise Exception("DATABASE_URL environment variable not defined")
-    DATABASES = {
-        "default": dj_database_url.parse(cenv("DATABASE_URL")),
-    }
-    BASE_URL = 'https://starfish-app-r4hzq.ondigitalocean.app'
-elif os.getenv("USER") == "DigOc" and len(sys.argv) > 1 and sys.argv[1] != 'collectstatic':  # Need this collectstatic check to avoid erros during build step in DigitalOcean
-    if os.getenv("DATABASE_URL", None) is None:
-        raise Exception("DATABASE_URL environment variable not defined")
-    DATABASES = {
-        "default": dj_database_url.parse(os.environ.get("DATABASE_URL")),
-    }
-    BASE_URL = 'https://starfish-app-r4hzq.ondigitalocean.app'
 
 print(f"using {BASE_URL=}", cenv("RUN_ENV"))
 # Password validation

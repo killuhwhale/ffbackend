@@ -8,7 +8,7 @@ stripe listen --forward-to localhost:8000/hooks/webhook/
 ssh killuh@164.92.104.164
 
 # TODO()
-- Update live db with new so reset the database and restart...
+- Update live db with new limits, so reset the database and restart...
 - Update both sites on Prod
 
 
@@ -26,6 +26,9 @@ We need ads....
 
 # Droplet
 https://www.digitalocean.com/community/tutorials/how-to-set-up-django-with-postgres-nginx-and-gunicorn-on-ubuntu-20-04
+
+
+./manage.py shell < gyms/create_workout_names.py
 
 
 # Set up local database (Using Docker is much better...)
@@ -74,7 +77,7 @@ docker build -t instafitapi .
 docker compose up
 ## Execute commands on container - migrate db
 docker compose exec instafitapi python manage.py migrate
-docker compose exec instafitapi python manage.py shell < gyms/create_workout_names_copy.py
+docker compose exec instafitapi python manage.py shell < gyms/create_workout_names.py
 
 # NOt sure - maybe GPU related...
 echo "515.86.01-0ubuntu0.20.04.1 hold" | sudo dpkg --set-selections

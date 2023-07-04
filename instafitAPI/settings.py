@@ -179,6 +179,7 @@ BASE_URL = ""
 if os.getenv("USER") == "killuh" and len(sys.argv) > 1 and sys.argv[1] != 'collectstatic' and cenv("RUN_ENV") == "production":  # Need this collectstatic check to avoid erros during build step in DigitalOcean
     if os.getenv("DATABASE_URL", None) is None:
         raise Exception("DATABASE_URL environment variable not defined")
+    print("Using db url: ", cenv("DATABASE_URL"))
     DATABASES = {
         "default": dj_database_url.parse(cenv("DATABASE_URL")),
     }

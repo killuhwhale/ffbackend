@@ -20,12 +20,13 @@ from gyms.serializers import (
     BodyMeasurementsSerializer, Gym_ClassSerializer, GymSerializer, GymClassCreateSerializer,
     GymClassSerializer, GymClassSerializerWithWorkouts, WorkoutGroupsCreateSerializer, WorkoutSerializer,
     WorkoutItemSerializer, WorkoutNamesSerializer, CoachesSerializer, ClassMembersSerializer,
+    WorkoutDualItemSerializer, WorkoutDualItemCreateSerializer,
     WorkoutItemCreateSerializer, CoachesCreateSerializer, ClassMembersCreateSerializer,
     GymClassFavoritesSerializer, GymFavoritesSerializer, LikedWorkoutsSerializer, WorkoutGroupsSerializer,
     WorkoutCreateSerializer, ProfileSerializer
 )
 from rest_framework_simplejwt.authentication import JWTAuthentication
-from gyms.models import BodyMeasurements, CompletedWorkoutGroups, CompletedWorkoutItems, CompletedWorkouts, Gyms, GymClasses, WorkoutCategories, Workouts, WorkoutItems, WorkoutNames, Coaches, ClassMembers, GymClassFavorites, GymFavorites, LikedWorkouts, WorkoutGroups
+from gyms.models import BodyMeasurements, CompletedWorkoutGroups, CompletedWorkoutItems, CompletedWorkouts, Gyms, GymClasses, WorkoutCategories, Workouts, WorkoutItems, WorkoutNames, Coaches, ClassMembers, GymClassFavorites, GymFavorites, LikedWorkouts, WorkoutGroups, WorkoutDualItems
 from django.db.models import Q, Exists
 
 from .s3 import s3Client
@@ -423,11 +424,53 @@ class WorkoutItemsPermission(BasePermission):
 
     def has_permission(self, request, view):
         # Workout Items are create in bulk and are not modified nor deleted directly.
+        print("WorkoutITems 403 checkkkkzzzz", request.method, type(view.action))
+        if view.action == "create" or view.action == "update" or view.action == "partial_update" or view.action == "destroy":
+            return False
+        elif request.method in SAFE_METHODS:
+            # Check permissions for read-only request
+            return True
+
+
+
+        elif request.method == "POST" and view.action == "items":
+            workout_id = request.data.get("workout", "0")
+            print("Perm check workoutItems", workout_id)
+            if not workout_id == "0":
+                workout, workout_group = None, None
+                try:
+                    workout = Workouts.objects.get(id=workout_id)
+                    workout_group = WorkoutGroups.objects.get(id=workout.group.id)
+                except Exception as e:
+                    print("Error: ", e)
+                    return False
+                if not workout or not workout_group:
+                    return False
+
+                owner_id = workout_group.owner_id
+                owned_by_class = workout_group.owned_by_class
+                # TODO() microservice hit other service to validate ownership
+                if owned_by_class:
+                    # Verify user is owner or coach of class.
+                    gym_class = GymClasses.objects.get(
+                        id=owner_id)
+                    return is_gymclass_coach(request.user, gym_class) or is_gym_class_owner(request.user, gym_class)
+                else:
+                    return str(request.user.id) == str(owner_id)
+        return False
+
+class WorkoutDualItemsPermission(BasePermission):
+    message = """Only users can create workout Items for themselves or for a class they own or are a coach of."""
+
+    def has_permission(self, request, view):
+        # Workout Items are create in bulk and are not modified nor deleted directly.
         print("WorkoutITems 403 checkkkk", request.method, view.action)
         if view.action == "create" or view.action == "update" or view.action == "partial_update" or view.action == "destroy":
             return False
         elif request.method in SAFE_METHODS:
             # Check permissions for read-only request
+            return True
+        elif request.method == "POST" and view.action == "record_items":
             return True
 
         elif request.method == "POST" and view.action == "items":
@@ -921,24 +964,24 @@ class WorkoutGroupsViewSet(viewsets.ModelViewSet, WorkoutGroupsPermission):
         except Exception as e:
             print("Error creating workout group:", e)
             return Response(to_err(f"Error creating workout group: {e}", exception=e), status=422)
+        return Response(WorkoutGroupsSerializer(workout_group, context={'request': request}).data)
+        # try:
+        #     parent_id = workout_group.id
+        #     print("Uploading workout files...", files)
+        #     uploaded_names = upload_media(
+        #         files, parent_id, FILES_KINDS[WORKOUT_FILES])
 
-        try:
-            parent_id = workout_group.id
-            print("Uploading workout files...", files)
-            uploaded_names = upload_media(
-                files, parent_id, FILES_KINDS[WORKOUT_FILES])
+        #     if not len(files) == len(uploaded_names):
+        #         workout_group.delete()
+        #         return Response(to_err("Media not uploaded."))
 
-            if not len(files) == len(uploaded_names):
-                workout_group.delete()
-                return Response(to_err("Media not uploaded."))
-
-            workout_group.media_ids = json.dumps([n for n in uploaded_names])
-            workout_group.save()
-            return Response(WorkoutGroupsSerializer(workout_group, context={'request': request}).data)
-        except Exception as e:
-            workout_group.delete()
-            print("Error Uploading media for workoutgroup ", e)
-            return Response(to_err("Failed to create workout"))
+        #     workout_group.media_ids = json.dumps([n for n in uploaded_names])
+        #     workout_group.save()
+        #     return Response(WorkoutGroupsSerializer(workout_group, context={'request': request}).data)
+        # except Exception as e:
+        #     workout_group.delete()
+        #     print("Error Uploading media for workoutgroup ", e)
+        #     return Response(to_err("Failed to create workout"))
 
     def last_id_from_media(self, cur_media_ids: List[str]) -> int:
         last_id = 0
@@ -1057,14 +1100,15 @@ class WorkoutGroupsViewSet(viewsets.ModelViewSet, WorkoutGroupsPermission):
         try:
             user_id = request.user.id
             workout_group_id = request.data.get("group")
+            print(f"Finishing workout group: {workout_group_id=}")
             workout_group = WorkoutGroups.objects.get(id=workout_group_id)
             if not workout_group.workouts_set.exists():
-                return Response(to_data("Cannot finish workoutgroup without workouts."))
+                return Response(to_data(f"Cannot finish workoutgroup without workouts {workout_group_id=}."))
             else:
                 # Ensure that at least 1 workout has a workoutItem
                 has_items = False
                 for workout in workout_group.workouts_set.all():
-                    if workout.workoutitems_set.exists():
+                    if workout.workoutitems_set.exists() or workout.workoutdualitems_set.exists():
                         has_items = True
                 if not has_items:
                     return Response(to_data("Cannot finish workoutgroup without workout items."))
@@ -1250,6 +1294,86 @@ class WorkoutItemsViewSet(viewsets.ModelViewSet,  WorkoutItemsPermission ):
         return WorkoutItemSerializer
 
 
+class WorkoutDualItemsViewSet(viewsets.ModelViewSet,  WorkoutItemsPermission ):
+    """
+    API endpoint that allows users to be viewed or edited.
+    """
+    queryset = WorkoutDualItems.objects.all()
+    permission_classes=[WorkoutDualItemsPermission]
+
+
+    def create(self, request, *args, **kwargs):
+        # return super().create(request, *args, **kwargs)
+        return Response(to_err("Failed, route not available.", Exception()), status=404)
+
+    @ action(detail=False, methods=['post'], permission_classes=[WorkoutDualItemsPermission])
+    def items(self, request, pk=None):
+        try:
+            print("Creating workout Dual Items: ", request.data)
+            workout_items = json.loads(request.data.get("items", '[]'))
+            workout_id = request.data.get("workout", 0)
+            workout = Workouts.objects.get(id=workout_id)
+
+            if not workout:
+                # TODO() Throw error?
+                return Response(to_err("Workout not found"))
+
+            print('Dual Items', workout_items)
+            print('Workout ID for DualItems:', workout_id)
+
+            items = []
+            for w in workout_items:
+                del w['id']
+                del w['workout']
+                items.append(WorkoutDualItems(
+                    **{**w, "workout": Workouts(id=workout_id), "name": WorkoutNames(id=w['name']['id'])}))
+
+            return Response(WorkoutDualItemSerializer(WorkoutDualItems.objects.bulk_create(items), many=True).data)
+        except Exception as e:
+            print(e)
+            return Response(to_err("Failed to insert"))
+
+
+    @ action(detail=False, methods=['post'], permission_classes=[WorkoutDualItemsPermission])
+    def record_items(self, request, pk=None):
+        '''Updates items once the workout is completed.'''
+        try:
+            print("Updating workout Dual Items: ", request.data)
+            workout_items = json.loads(request.data.get("items", '[]'))
+            workout_id = request.data.get("workout", 0)
+            workout = Workouts.objects.get(id=workout_id)
+
+            if not workout:
+                # TODO() Throw error?
+                return Response(to_err("Workout not found"))
+
+            print('Dual Items', workout_items)
+            print('Workout ID for DualItems:', workout_id)
+
+            items = []
+            for w in workout_items:
+                del w['workout']
+                nw = WorkoutDualItems(
+                    **{**w, "finished": True, "workout": Workouts(id=workout_id), "name": WorkoutNames(id=w['name']['id'])})
+                nw.save()
+                items.append(nw)
+
+            return Response(WorkoutDualItemSerializer(items, many=True).data)
+        except Exception as e:
+            print("Error updating dual items: ", e)
+            raise e
+            # return Response(to_err("Failed to insert"))
+
+
+
+    def get_serializer_class(self):
+        if self.action == 'list' or self.action == 'retrieve':
+            return WorkoutDualItemSerializer
+        if self.action == 'create':
+            return WorkoutDualItemCreateSerializer
+        return WorkoutDualItemSerializer
+
+
 
 ########################################################
 #   ////////////////////////////////////////////////   #
@@ -1303,28 +1427,29 @@ class CompletedWorkoutGroupsViewSet(DestroyWithPayloadMixin, viewsets.ModelViewS
             return Response(to_err("Failed to create CompletedWorkoutGroup", e), status=422)
 
         uploaded_names = []
-        try:
-            parent_id = comp_workout_group.id
-            print("Uploading files for completedWorkoutGroup: ", files, "\n")
-            uploaded_names = upload_media(
-                files, parent_id, FILES_KINDS[COMP_WORKOUT_FILES])
+        parent_id = comp_workout_group.id
+        # try:
+        #     parent_id = comp_workout_group.id
+        #     print("Uploading files for completedWorkoutGroup: ", files, "\n")
+        #     uploaded_names = upload_media(
+        #         files, parent_id, FILES_KINDS[COMP_WORKOUT_FILES])
 
-            # If given files to do match uploaded files, consider bad upload, delete created stuff and return error
-            # if len(files) != len(uploaded_names):
-            #     comp_workout_group.delete() #
-            #     delete_media(parent_id, uploaded_names, FILES_KINDS[COMP_WORKOUT_FILES]) # undo step two
-            #     return Response(to_err("Failed to upload media files."))
+        #     # If given files to do match uploaded files, consider bad upload, delete created stuff and return error
+        #     # if len(files) != len(uploaded_names):
+        #     #     comp_workout_group.delete() #
+        #     #     delete_media(parent_id, uploaded_names, FILES_KINDS[COMP_WORKOUT_FILES]) # undo step two
+        #     #     return Response(to_err("Failed to upload media files."))
 
-            comp_workout_group.media_ids = json.dumps(
-                [n for n in uploaded_names])
-            comp_workout_group.save()
+        #     comp_workout_group.media_ids = json.dumps(
+        #         [n for n in uploaded_names])
+        #     comp_workout_group.save()
 
-        except Exception as e:
-            comp_workout_group.delete()  # undo step one
-            delete_media(parent_id, uploaded_names,
-                         FILES_KINDS[COMP_WORKOUT_FILES])  # undo step two
-            print("Error uploading media:", e)
-            return Response(to_err("Error uploading media"))
+        # except Exception as e:
+        #     comp_workout_group.delete()  # undo step one
+        #     delete_media(parent_id, uploaded_names,
+        #                  FILES_KINDS[COMP_WORKOUT_FILES])  # undo step two
+        #     print("Error uploading media:", e)
+        #     return Response(to_err("Error uploading media"))
 
         try:
             allItems = []
@@ -1370,8 +1495,8 @@ class CompletedWorkoutGroupsViewSet(DestroyWithPayloadMixin, viewsets.ModelViewS
 
         except Exception as e:
             comp_workout_group.delete()  # undo step one, should delete all foregin keys
-            delete_media(parent_id, uploaded_names,
-                         FILES_KINDS[COMP_WORKOUT_FILES])  # undo step two
+            # delete_media(parent_id, uploaded_names,
+            #              FILES_KINDS[COMP_WORKOUT_FILES])  # undo step two
             msg = f"Error creating CompleteWorkoutItems {e}"
             print(msg, e)
             return Response(to_err(msg))

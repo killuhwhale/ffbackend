@@ -5,8 +5,10 @@ from rest_framework import serializers
 from gyms.models import (
     BodyMeasurements, CompletedWorkoutGroups, CompletedWorkoutItems, CompletedWorkouts, GymClassFavorites, ClassMembers, Coaches,
     Gyms, GymClasses, GymFavorites, LikedWorkouts, WorkoutCategories,
-    Workouts, WorkoutItems, WorkoutNames, WorkoutGroups)
+    Workouts, WorkoutItems, WorkoutNames, WorkoutGroups, WorkoutDualItems)
 
+import logging
+logger = logging.getLogger(__name__)
 
 class Gym_ClassSerializer(serializers.ModelSerializer):
     ''' Searilzier gym_class for gym list. Avoid circular dependency'''
@@ -134,23 +136,49 @@ class WorkoutItemSerializer(serializers.ModelSerializer):
         model = WorkoutItems
         fields = '__all__'
 
-
 class WorkoutItemCreateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = WorkoutItems
         fields = '__all__'
 
+class WorkoutDualItemSerializer(serializers.ModelSerializer):
+    name = WorkoutNamesSerializer()
+
+    class Meta:
+        model = WorkoutDualItems
+        fields = '__all__'
+
+class WorkoutDualItemCreateSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = WorkoutDualItems
+        fields = '__all__'
+
 
 class WorkoutSerializer(serializers.ModelSerializer):
-    workout_items = WorkoutItemSerializer(
-        source='workoutitems_set',  many=True, required=False)
+    # TODO make this field a function and get the correct set based on scheme_type, either dual or regular...
+    workout_items = serializers.SerializerMethodField('items')
+
+
+    def items(self, workout):
+        print("Serializing workout: ", workout)
+        try:
+            if workout.scheme_type <= 2:
+                # logger.critical("Returning workout items: ", workout.workoutitems_set.all())
+                # return workout.workoutitems_set.all()
+                return WorkoutItemSerializer( workout.workoutitems_set.all(),  many=True, required=False).data
+            # logger.critical("Returning workout dual items: ", workout.workoutdualitems_set.all())
+            # return workout.workoutdualitems_set.all()
+            return WorkoutDualItemSerializer(workout.workoutdualitems_set.all(),  many=True, required=False).data
+        except Exception as err:
+            logger.info("WorkoutItem Serializer error: ", err)
 
     class Meta:
         model = Workouts
         # exclude = ('group', )
         fields = '__all__'
-        depth = 1
+
 
 
 class WorkoutCreateSerializer(serializers.ModelSerializer):

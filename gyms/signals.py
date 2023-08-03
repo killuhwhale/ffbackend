@@ -30,25 +30,25 @@ def delete_media_from_gym_class(sender, **kwargs):
     return False
 
 
-@receiver(post_delete)
-def delete_media_with_unknown_ids(sender, **kwargs):
-    file_kind = ""
-    if(sender == WorkoutGroups):
-        file_kind = "workouts"
-    elif(sender == CompletedWorkoutGroups):
-        file_kind = "completedWorkouts"
-    elif(sender == WorkoutNames):
-        file_kind = "names"
+# @receiver(post_delete)
+# def delete_media_with_unknown_ids(sender, **kwargs):
+#     file_kind = ""
+#     if(sender == WorkoutGroups):
+#         file_kind = "workouts"
+#     elif(sender == CompletedWorkoutGroups):
+#         file_kind = "completedWorkouts"
+#     elif(sender == WorkoutNames):
+#         file_kind = "names"
 
-    if not file_kind:
-        return False
+#     if not file_kind:
+#         return False
 
-    try:
-        instance = kwargs['instance']
-        removed = delete_media(instance.id, json.loads(
-            instance.media_ids), file_kind)
-        return len(removed.keys()) > 0
+#     try:
+#         instance = kwargs['instance']
+#         removed = delete_media(instance.id, json.loads(
+#             instance.media_ids), file_kind)
+#         return len(removed.keys()) > 0
 
-    except Exception as e:
-        print("Error removing gym_class media", e)
-    return False
+#     except Exception as e:
+#         print("Error removing gym_class media", e)
+#     return False

@@ -19,7 +19,23 @@ we have differing limits based on user is member or not
 we have permission.
 
 
-We need ads....
+
+
+
+# Membership
+
+- Create Gyms and Classes
+- Create max of 15 workouts per day.
+    - non member can create 1 per day
+    - Class workouts are limited by trigger limit and are independent of the users workouts.
+        - User A can create 15 workouts under Class A, and any other class. User A can only create 15 workouts on a single day for themselves.
+        - User A can do this only if they are a member.
+
+- No Ads
+    - Ads for non members
+
+- PASSWORD RETUREND WHEN REGISTERING SHOULDNT
+
 
 
 
@@ -60,6 +76,8 @@ https://www.digitalocean.com/community/tutorials/how-to-set-up-django-with-postg
 ## Prod
  docker compose -f docker-compose_prod.yml up
  docker compose -f docker-compose_prod.yml exec instafitapiprod bash migrate_create.sh
+ docker compose -f docker-compose_prod.yml exec instafitapiprod pip install -r requirements.txt
+ docker compose -f docker-compose_prod.yml exec -T instafitapiprod python manage.py shell <  gyms/create_test_data.py
  docker compose -f docker-compose_prod.yml down
 
 ## Test
@@ -94,6 +112,12 @@ git branch -M staging
 git push origin HEAD
 
 
+curl -X PUT \
+-H "Content-Type: application/json" \
+-H "Authorization: Bearer dop_v1_8fb7d26bb6801733c39e34929c06a5e458e86bfde4b9fc874d4c40b74a76fa3d" \
+-d '{"rules": [{"type": "ip_addr","value": "192.168.1.1"},{"type": "droplet","value": "163973392"},{"type": "k8s","value": "ff2a6c52-5a44-4b63-b99c-0e98e7a63d61"},{"type": "tag","value": "backend"}]}' \
+"https://api.digitalocean.com/v2/databases/9cc10173-e9ea-4176-9dbc-a4cee4c4ff30/firewall"
+
 # Create new migrations for Trigger
 python manage.py makemigrations --empty gyms --name tigger_limit_
 python manage.py makemigrations --empty gyms --name func_
@@ -114,11 +138,6 @@ DO $$ DECLARE
             EXECUTE 'DROP TABLE IF EXISTS ' || quote_ident(r.tablename) || ' CASCADE';
         END LOOP;
       END $$;
-
-
-# Bugs:
-    - Cannot delete gym if its favorited...
-        - should be able to delete gym and remove favorites....
 
 
 # Implement Google Sign in (Not sure if its worth yet.. )
@@ -238,26 +257,7 @@ https://developers.google.com/identity/one-tap/android/idtoken-auth
                 - Add special header from inside app
 
 
-# Todo
-
-- Change incentive to purchase a membership
-    - Currently there are no restrictions aside from daily limits.
-    - How should I actually incentivize?
-        - Trial vs Membership
-            - Trial can only:
-                - Complete or Create 3 workouts per week
-                - Cannot create gyms
-            - Members can:
-                - Create Gym (limit 15)
-                    - Add users to manage classes/ enable personal trainers
-                    - Create private classes limit(15 classes per gym)
-
-        - Ads
-            - Ads for non members
-
-~ PASSWORD RETUREND WHEN REGISTERING SHOULDNT
-
-Required Features:
+- Required Features:
     √ iOs and Android
     API work
         √ Intensity and rest per exercise
@@ -278,143 +278,143 @@ Names
 Fitness Platform
     - Fitform
 
-Endpoints
+- Endpoints
 
-/^users/$ []
-/^users\.(?P<format>[a-z0-9]+)/?$ []
-/^users/profile_image/$ []
-/^users/profile_image\.(?P<format>[a-z0-9]+)/?$ []
-/^users/update_username/$ []
-/^users/update_username\.(?P<format>[a-z0-9]+)/?$ []
-/^users/user_info/$ []
-/^users/user_info\.(?P<format>[a-z0-9]+)/?$ []
-/^users/(?P<pk>[^/.]+)/$ []
-/^users/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$ []
-/^user/reset_password/$ []
-/^user/reset_password\.(?P<format>[a-z0-9]+)/?$ []
-/^user/reset_password_with_old/$ []
-/^user/reset_password_with_old\.(?P<format>[a-z0-9]+)/?$ []
-/^user/send_reset_code/$ []
-/^user/send_reset_code\.(?P<format>[a-z0-9]+)/?$ []
-/^groups/$ []
-/^groups\.(?P<format>[a-z0-9]+)/?$ []
-/^groups/(?P<pk>[^/.]+)/$ []
-/^groups/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$ []
-/^$ [View,as_view,<locals>]
-/^\.(?P<format>[a-z0-9]+)/?$ [View,as_view,<locals>]
+    /^users/$ []
+    /^users\.(?P<format>[a-z0-9]+)/?$ []
+    /^users/profile_image/$ []
+    /^users/profile_image\.(?P<format>[a-z0-9]+)/?$ []
+    /^users/update_username/$ []
+    /^users/update_username\.(?P<format>[a-z0-9]+)/?$ []
+    /^users/user_info/$ []
+    /^users/user_info\.(?P<format>[a-z0-9]+)/?$ []
+    /^users/(?P<pk>[^/.]+)/$ []
+    /^users/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$ []
+    /^user/reset_password/$ []
+    /^user/reset_password\.(?P<format>[a-z0-9]+)/?$ []
+    /^user/reset_password_with_old/$ []
+    /^user/reset_password_with_old\.(?P<format>[a-z0-9]+)/?$ []
+    /^user/send_reset_code/$ []
+    /^user/send_reset_code\.(?P<format>[a-z0-9]+)/?$ []
+    /^groups/$ []
+    /^groups\.(?P<format>[a-z0-9]+)/?$ []
+    /^groups/(?P<pk>[^/.]+)/$ []
+    /^groups/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$ []
+    /^$ [View,as_view,<locals>]
+    /^\.(?P<format>[a-z0-9]+)/?$ [View,as_view,<locals>]
 
 
-/^gyms/$ []
-/^gyms\.(?P<format>[a-z0-9]+)/?$ []
-/^gyms/favorite/$ []
-/^gyms/favorite\.(?P<format>[a-z0-9]+)/?$ []
-/^gyms/unfavorite/$ []
-/^gyms/unfavorite\.(?P<format>[a-z0-9]+)/?$ []
-/^gyms/user_gyms/$ []
-/^gyms/user_gyms\.(?P<format>[a-z0-9]+)/?$ []
-/^gyms/(?P<pk>[^/.]+)/$ []
-/^gyms/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$ []
-/^gyms/(?P<pk>[^/.]+)/edit_media/$ []
-/^gyms/(?P<pk>[^/.]+)/edit_media\.(?P<format>[a-z0-9]+)/?$ []
-/^gyms/(?P<pk>[^/.]+)/gymsclasses/$ []
-/^gyms/(?P<pk>[^/.]+)/gymsclasses\.(?P<format>[a-z0-9]+)/?$ []
-/^gyms/(?P<pk>[^/.]+)/user_favorites/$ []
-/^gyms/(?P<pk>[^/.]+)/user_favorites\.(?P<format>[a-z0-9]+)/?$ []
-/^gymClasses/$ []
-/^gymClasses\.(?P<format>[a-z0-9]+)/?$ []
-/^gymClasses/favorite/$ []
-/^gymClasses/favorite\.(?P<format>[a-z0-9]+)/?$ []
-/^gymClasses/unfavorite/$ []
-/^gymClasses/unfavorite\.(?P<format>[a-z0-9]+)/?$ []
-/^gymClasses/(?P<pk>[^/.]+)/$ []
-/^gymClasses/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$ []
-/^gymClasses/(?P<pk>[^/.]+)/edit_media/$ []
-/^gymClasses/(?P<pk>[^/.]+)/edit_media\.(?P<format>[a-z0-9]+)/?$ []
-/^gymClasses/(?P<pk>[^/.]+)/user_favorites/$ []
-/^gymClasses/(?P<pk>[^/.]+)/user_favorites\.(?P<format>[a-z0-9]+)/?$ []
-/^gymClasses/(?P<pk>[^/.]+)/workouts/$ []
-/^gymClasses/(?P<pk>[^/.]+)/workouts\.(?P<format>[a-z0-9]+)/?$ []
-/^workoutGroups/$ []
-/^workoutGroups\.(?P<format>[a-z0-9]+)/?$ []
-/^workoutGroups/favorite/$ []
-/^workoutGroups/favorite\.(?P<format>[a-z0-9]+)/?$ []
-/^workoutGroups/finish/$ []
-/^workoutGroups/finish\.(?P<format>[a-z0-9]+)/?$ []
-/^workoutGroups/unfavorite/$ []
-/^workoutGroups/unfavorite\.(?P<format>[a-z0-9]+)/?$ []
-/^workoutGroups/(?P<pk>[^/.]+)/$ []
-/^workoutGroups/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$ []
-/^workoutGroups/(?P<pk>[^/.]+)/add_media_to_workout/$ []
-/^workoutGroups/(?P<pk>[^/.]+)/add_media_to_workout\.(?P<format>[a-z0-9]+)/?$ []
-/^workoutGroups/(?P<pk>[^/.]+)/class_workouts/$ []
-/^workoutGroups/(?P<pk>[^/.]+)/class_workouts\.(?P<format>[a-z0-9]+)/?$ []
-/^workoutGroups/(?P<pk>[^/.]+)/remove_media_from_workout/$ []
-/^workoutGroups/(?P<pk>[^/.]+)/remove_media_from_workout\.(?P<format>[a-z0-9]+)/?$ []
-/^workoutGroups/(?P<pk>[^/.]+)/user_workouts/$ []
-/^workoutGroups/(?P<pk>[^/.]+)/user_workouts\.(?P<format>[a-z0-9]+)/?$ []
-/^workouts/$ []
-/^workouts\.(?P<format>[a-z0-9]+)/?$ []
-/^workouts/(?P<pk>[^/.]+)/$ []
-/^workouts/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$ []
-/^workoutNames/$ []
-/^workoutNames\.(?P<format>[a-z0-9]+)/?$ []
-/^workoutNames/(?P<pk>[^/.]+)/$ []
-/^workoutNames/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$ []
-/^workoutNames/(?P<pk>[^/.]+)/add_media_to_workout_name/$ []
-/^workoutNames/(?P<pk>[^/.]+)/add_media_to_workout_name\.(?P<format>[a-z0-9]+)/?$ []
-/^workoutNames/(?P<pk>[^/.]+)/remove_media_from_workout_name/$ []
-/^workoutNames/(?P<pk>[^/.]+)/remove_media_from_workout_name\.(?P<format>[a-z0-9]+)/?$ []
-/^workoutCategories/$ []
-/^workoutCategories\.(?P<format>[a-z0-9]+)/?$ []
-/^workoutCategories/(?P<pk>[^/.]+)/$ []
-/^workoutCategories/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$ []
-/^workoutItems/$ []
-/^workoutItems\.(?P<format>[a-z0-9]+)/?$ []
-/^workoutItems/items/$ []
-/^workoutItems/items\.(?P<format>[a-z0-9]+)/?$ []
-/^workoutItems/(?P<pk>[^/.]+)/$ []
-/^workoutItems/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$ []
-/^completedWorkoutGroups/$ []
-/^completedWorkoutGroups\.(?P<format>[a-z0-9]+)/?$ []
-/^completedWorkoutGroups/workouts/$ []
-/^completedWorkoutGroups/workouts\.(?P<format>[a-z0-9]+)/?$ []
-/^completedWorkoutGroups/(?P<pk>[^/.]+)/$ []
-/^completedWorkoutGroups/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$ []
-/^completedWorkoutGroups/(?P<pk>[^/.]+)/add_media_to_workout/$ []
-/^completedWorkoutGroups/(?P<pk>[^/.]+)/add_media_to_workout\.(?P<format>[a-z0-9]+)/?$ []
-/^completedWorkoutGroups/(?P<pk>[^/.]+)/completed_workout_group/$ []
-/^completedWorkoutGroups/(?P<pk>[^/.]+)/completed_workout_group\.(?P<format>[a-z0-9]+)/?$ []
-/^completedWorkoutGroups/(?P<pk>[^/.]+)/completed_workout_group_by_og_workout_group/$ []
-/^completedWorkoutGroups/(?P<pk>[^/.]+)/completed_workout_group_by_og_workout_group\.(?P<format>[a-z0-9]+)/?$ []
-/^completedWorkoutGroups/(?P<pk>[^/.]+)/remove_media_from_workout/$ []
-/^completedWorkoutGroups/(?P<pk>[^/.]+)/remove_media_from_workout\.(?P<format>[a-z0-9]+)/?$ []
-/^completedWorkouts/$ []
-/^completedWorkouts\.(?P<format>[a-z0-9]+)/?$ []
-/^completedWorkouts/(?P<pk>[^/.]+)/$ []
-/^completedWorkouts/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$ []
-/^coaches/$ []
-/^coaches\.(?P<format>[a-z0-9]+)/?$ []
-/^coaches/remove/$ []
-/^coaches/remove\.(?P<format>[a-z0-9]+)/?$ []
-/^coaches/(?P<pk>[^/.]+)/$ []
-/^coaches/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$ []
-/^coaches/(?P<pk>[^/.]+)/coaches/$ []
-/^coaches/(?P<pk>[^/.]+)/coaches\.(?P<format>[a-z0-9]+)/?$ []
-/^classMembers/$ []
-/^classMembers\.(?P<format>[a-z0-9]+)/?$ []
-/^classMembers/remove/$ []
-/^classMembers/remove\.(?P<format>[a-z0-9]+)/?$ []
-/^classMembers/(?P<pk>[^/.]+)/$ []
-/^classMembers/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$ []
-/^classMembers/(?P<pk>[^/.]+)/members/$ []
-/^classMembers/(?P<pk>[^/.]+)/members\.(?P<format>[a-z0-9]+)/?$ []
-/^profile/gym_class_favs/$ []
-/^profile/gym_class_favs\.(?P<format>[a-z0-9]+)/?$ []
-/^profile/gym_favs/$ []
-/^profile/gym_favs\.(?P<format>[a-z0-9]+)/?$ []
-/^profile/profile/$ []
-/^profile/profile\.(?P<format>[a-z0-9]+)/?$ []
-/^profile/workout_groups/$ []
-/^profile/workout_groups\.(?P<format>[a-z0-9]+)/?$ []
-/^stats/(?P<pk>[^/.]+)/user_workouts/$ []
-/^stats/(?P<pk>[^/.]+)/user_workouts\.(?P<format>[a-z0-9]+)/?$ []
+    /^gyms/$ []
+    /^gyms\.(?P<format>[a-z0-9]+)/?$ []
+    /^gyms/favorite/$ []
+    /^gyms/favorite\.(?P<format>[a-z0-9]+)/?$ []
+    /^gyms/unfavorite/$ []
+    /^gyms/unfavorite\.(?P<format>[a-z0-9]+)/?$ []
+    /^gyms/user_gyms/$ []
+    /^gyms/user_gyms\.(?P<format>[a-z0-9]+)/?$ []
+    /^gyms/(?P<pk>[^/.]+)/$ []
+    /^gyms/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$ []
+    /^gyms/(?P<pk>[^/.]+)/edit_media/$ []
+    /^gyms/(?P<pk>[^/.]+)/edit_media\.(?P<format>[a-z0-9]+)/?$ []
+    /^gyms/(?P<pk>[^/.]+)/gymsclasses/$ []
+    /^gyms/(?P<pk>[^/.]+)/gymsclasses\.(?P<format>[a-z0-9]+)/?$ []
+    /^gyms/(?P<pk>[^/.]+)/user_favorites/$ []
+    /^gyms/(?P<pk>[^/.]+)/user_favorites\.(?P<format>[a-z0-9]+)/?$ []
+    /^gymClasses/$ []
+    /^gymClasses\.(?P<format>[a-z0-9]+)/?$ []
+    /^gymClasses/favorite/$ []
+    /^gymClasses/favorite\.(?P<format>[a-z0-9]+)/?$ []
+    /^gymClasses/unfavorite/$ []
+    /^gymClasses/unfavorite\.(?P<format>[a-z0-9]+)/?$ []
+    /^gymClasses/(?P<pk>[^/.]+)/$ []
+    /^gymClasses/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$ []
+    /^gymClasses/(?P<pk>[^/.]+)/edit_media/$ []
+    /^gymClasses/(?P<pk>[^/.]+)/edit_media\.(?P<format>[a-z0-9]+)/?$ []
+    /^gymClasses/(?P<pk>[^/.]+)/user_favorites/$ []
+    /^gymClasses/(?P<pk>[^/.]+)/user_favorites\.(?P<format>[a-z0-9]+)/?$ []
+    /^gymClasses/(?P<pk>[^/.]+)/workouts/$ []
+    /^gymClasses/(?P<pk>[^/.]+)/workouts\.(?P<format>[a-z0-9]+)/?$ []
+    /^workoutGroups/$ []
+    /^workoutGroups\.(?P<format>[a-z0-9]+)/?$ []
+    /^workoutGroups/favorite/$ []
+    /^workoutGroups/favorite\.(?P<format>[a-z0-9]+)/?$ []
+    /^workoutGroups/finish/$ []
+    /^workoutGroups/finish\.(?P<format>[a-z0-9]+)/?$ []
+    /^workoutGroups/unfavorite/$ []
+    /^workoutGroups/unfavorite\.(?P<format>[a-z0-9]+)/?$ []
+    /^workoutGroups/(?P<pk>[^/.]+)/$ []
+    /^workoutGroups/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$ []
+    /^workoutGroups/(?P<pk>[^/.]+)/add_media_to_workout/$ []
+    /^workoutGroups/(?P<pk>[^/.]+)/add_media_to_workout\.(?P<format>[a-z0-9]+)/?$ []
+    /^workoutGroups/(?P<pk>[^/.]+)/class_workouts/$ []
+    /^workoutGroups/(?P<pk>[^/.]+)/class_workouts\.(?P<format>[a-z0-9]+)/?$ []
+    /^workoutGroups/(?P<pk>[^/.]+)/remove_media_from_workout/$ []
+    /^workoutGroups/(?P<pk>[^/.]+)/remove_media_from_workout\.(?P<format>[a-z0-9]+)/?$ []
+    /^workoutGroups/(?P<pk>[^/.]+)/user_workouts/$ []
+    /^workoutGroups/(?P<pk>[^/.]+)/user_workouts\.(?P<format>[a-z0-9]+)/?$ []
+    /^workouts/$ []
+    /^workouts\.(?P<format>[a-z0-9]+)/?$ []
+    /^workouts/(?P<pk>[^/.]+)/$ []
+    /^workouts/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$ []
+    /^workoutNames/$ []
+    /^workoutNames\.(?P<format>[a-z0-9]+)/?$ []
+    /^workoutNames/(?P<pk>[^/.]+)/$ []
+    /^workoutNames/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$ []
+    /^workoutNames/(?P<pk>[^/.]+)/add_media_to_workout_name/$ []
+    /^workoutNames/(?P<pk>[^/.]+)/add_media_to_workout_name\.(?P<format>[a-z0-9]+)/?$ []
+    /^workoutNames/(?P<pk>[^/.]+)/remove_media_from_workout_name/$ []
+    /^workoutNames/(?P<pk>[^/.]+)/remove_media_from_workout_name\.(?P<format>[a-z0-9]+)/?$ []
+    /^workoutCategories/$ []
+    /^workoutCategories\.(?P<format>[a-z0-9]+)/?$ []
+    /^workoutCategories/(?P<pk>[^/.]+)/$ []
+    /^workoutCategories/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$ []
+    /^workoutItems/$ []
+    /^workoutItems\.(?P<format>[a-z0-9]+)/?$ []
+    /^workoutItems/items/$ []
+    /^workoutItems/items\.(?P<format>[a-z0-9]+)/?$ []
+    /^workoutItems/(?P<pk>[^/.]+)/$ []
+    /^workoutItems/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$ []
+    /^completedWorkoutGroups/$ []
+    /^completedWorkoutGroups\.(?P<format>[a-z0-9]+)/?$ []
+    /^completedWorkoutGroups/workouts/$ []
+    /^completedWorkoutGroups/workouts\.(?P<format>[a-z0-9]+)/?$ []
+    /^completedWorkoutGroups/(?P<pk>[^/.]+)/$ []
+    /^completedWorkoutGroups/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$ []
+    /^completedWorkoutGroups/(?P<pk>[^/.]+)/add_media_to_workout/$ []
+    /^completedWorkoutGroups/(?P<pk>[^/.]+)/add_media_to_workout\.(?P<format>[a-z0-9]+)/?$ []
+    /^completedWorkoutGroups/(?P<pk>[^/.]+)/completed_workout_group/$ []
+    /^completedWorkoutGroups/(?P<pk>[^/.]+)/completed_workout_group\.(?P<format>[a-z0-9]+)/?$ []
+    /^completedWorkoutGroups/(?P<pk>[^/.]+)/completed_workout_group_by_og_workout_group/$ []
+    /^completedWorkoutGroups/(?P<pk>[^/.]+)/completed_workout_group_by_og_workout_group\.(?P<format>[a-z0-9]+)/?$ []
+    /^completedWorkoutGroups/(?P<pk>[^/.]+)/remove_media_from_workout/$ []
+    /^completedWorkoutGroups/(?P<pk>[^/.]+)/remove_media_from_workout\.(?P<format>[a-z0-9]+)/?$ []
+    /^completedWorkouts/$ []
+    /^completedWorkouts\.(?P<format>[a-z0-9]+)/?$ []
+    /^completedWorkouts/(?P<pk>[^/.]+)/$ []
+    /^completedWorkouts/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$ []
+    /^coaches/$ []
+    /^coaches\.(?P<format>[a-z0-9]+)/?$ []
+    /^coaches/remove/$ []
+    /^coaches/remove\.(?P<format>[a-z0-9]+)/?$ []
+    /^coaches/(?P<pk>[^/.]+)/$ []
+    /^coaches/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$ []
+    /^coaches/(?P<pk>[^/.]+)/coaches/$ []
+    /^coaches/(?P<pk>[^/.]+)/coaches\.(?P<format>[a-z0-9]+)/?$ []
+    /^classMembers/$ []
+    /^classMembers\.(?P<format>[a-z0-9]+)/?$ []
+    /^classMembers/remove/$ []
+    /^classMembers/remove\.(?P<format>[a-z0-9]+)/?$ []
+    /^classMembers/(?P<pk>[^/.]+)/$ []
+    /^classMembers/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$ []
+    /^classMembers/(?P<pk>[^/.]+)/members/$ []
+    /^classMembers/(?P<pk>[^/.]+)/members\.(?P<format>[a-z0-9]+)/?$ []
+    /^profile/gym_class_favs/$ []
+    /^profile/gym_class_favs\.(?P<format>[a-z0-9]+)/?$ []
+    /^profile/gym_favs/$ []
+    /^profile/gym_favs\.(?P<format>[a-z0-9]+)/?$ []
+    /^profile/profile/$ []
+    /^profile/profile\.(?P<format>[a-z0-9]+)/?$ []
+    /^profile/workout_groups/$ []
+    /^profile/workout_groups\.(?P<format>[a-z0-9]+)/?$ []
+    /^stats/(?P<pk>[^/.]+)/user_workouts/$ []
+    /^stats/(?P<pk>[^/.]+)/user_workouts\.(?P<format>[a-z0-9]+)/?$ []

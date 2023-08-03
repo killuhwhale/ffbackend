@@ -137,6 +137,47 @@ class WorkoutItems(models.Model):
     date = models.DateTimeField(auto_now_add=True)
 
 
+class WorkoutDualItems(models.Model):
+    workout = models.ForeignKey(Workouts, on_delete=models.CASCADE)
+    name = models.ForeignKey(
+        WorkoutNames, on_delete=models.CASCADE)                # Squat
+    ssid = models.IntegerField(default=-1, blank=True) # superset id, groups items together
+    constant = models.BooleanField(default=False, blank=True) # For Reps based workout, quantity can be constant
+
+    finished = models.BooleanField(default=False)  # Indicate if the user needs to record their workout still
+    penalty = models.CharField(max_length=140, default="") # Store what the penalty is: every x METRIC[reps, distance, duration]
+
+    sets = models.IntegerField(default=0)
+    reps = models.CharField(max_length=140, default="[0]")
+    pause_duration = models.FloatField(default=0.00)
+    duration = models.CharField(max_length=140, default="[0]")
+    duration_unit = models.IntegerField(default=0)
+    distance = models.CharField(max_length=140, default="[0]")
+    distance_unit = models.IntegerField(default=0)
+    weights = models.CharField(
+        max_length=400, default="[]")
+    weight_unit = models.CharField(max_length=2, default='kg')
+    rest_duration = models.FloatField(default=0.0)
+    rest_duration_unit = models.IntegerField(default=0)
+    percent_of = models.CharField(max_length=20, default='')
+    order = models.IntegerField()  # order added by user.
+    date = models.DateTimeField(auto_now_add=True)
+
+    # Record
+    r_sets = models.IntegerField(default=0)
+    r_reps = models.CharField(max_length=140, default="[0]")
+    r_pause_duration = models.FloatField(default=0.00)
+    r_duration = models.CharField(max_length=140, default="[0]")
+    r_duration_unit = models.IntegerField(default=0)
+    r_distance = models.CharField(max_length=140, default="[0]")
+    r_distance_unit = models.IntegerField(default=0)
+    r_weights = models.CharField(max_length=400, default="[]")
+    r_weight_unit = models.CharField(max_length=2, default='kg')
+    r_rest_duration = models.FloatField(default=0.0)
+    r_rest_duration_unit = models.IntegerField(default=0)
+    r_percent_of = models.CharField(max_length=20, default='')
+
+
 class CompletedWorkoutGroups(models.Model):
     # If workout_Group get deleted, we need the title.....
     workout_group = models.ForeignKey(

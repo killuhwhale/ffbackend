@@ -183,7 +183,7 @@ if os.getenv("USER") == "killuh" and len(sys.argv) > 1 and sys.argv[1] != 'colle
     DATABASES = {
         "default": dj_database_url.parse(cenv("DATABASE_URL")),
     }
-    BASE_URL = 'https://fittrackrr.com/api'
+    BASE_URL = 'https://fittrackrr.com/ffapi'
 elif os.getenv("USER") == "localdocker":
     DATABASES = {
         "default":  {

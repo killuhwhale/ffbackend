@@ -55,6 +55,7 @@ class HookViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=['POST'], permission_classes=[])
     def webhook(self, request, pk=None):
+        print(f"webhook called...")
         try:
             payload = request.body.decode('utf-8')
             event = None

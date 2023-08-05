@@ -3,7 +3,7 @@ from django.core.serializers import serialize
 from itertools import chain
 from rest_framework import serializers
 from gyms.models import (
-    BodyMeasurements, CompletedWorkoutGroups, CompletedWorkoutItems, CompletedWorkouts, GymClassFavorites, ClassMembers, Coaches,
+    BodyMeasurements, CompletedWorkoutDualItems, CompletedWorkoutGroups, CompletedWorkoutItems, CompletedWorkouts, GymClassFavorites, ClassMembers, Coaches,
     Gyms, GymClasses, GymFavorites, LikedWorkouts, WorkoutCategories,
     Workouts, WorkoutItems, WorkoutNames, WorkoutGroups, WorkoutDualItems)
 
@@ -79,6 +79,14 @@ class CompletedWorkoutItemSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
+class CompletedWorkoutDualItemSerializer(serializers.ModelSerializer):
+    name = WorkoutNamesSerializer()
+
+    class Meta:
+        model = CompletedWorkoutDualItems
+        fields = '__all__'
+
+
 class CompletedWorkoutItemCreateSerializer(serializers.ModelSerializer):
 
     class Meta:
@@ -87,8 +95,15 @@ class CompletedWorkoutItemCreateSerializer(serializers.ModelSerializer):
 
 
 class CompletedWorkoutSerializer(serializers.ModelSerializer):
-    completed_workout_items = CompletedWorkoutItemSerializer(
-        source='completedworkoutitems_set',  many=True, required=False)
+    completed_workout_items = serializers.SerializerMethodField("items")
+
+    def items(self, completed_workout):
+        print(f"CompItemSerializer: {completed_workout=}")
+        if completed_workout.scheme_type <= 2:
+            return CompletedWorkoutItemSerializer(completed_workout.completedworkoutitems_set, many=True, required=False).data
+        return CompletedWorkoutDualItemSerializer(completed_workout.completedworkoutdualitems_set, many=True, required=False).data
+
+
 
     class Meta:
         model = CompletedWorkouts

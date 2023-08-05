@@ -26,7 +26,7 @@ from gyms.serializers import (
     WorkoutCreateSerializer, ProfileSerializer
 )
 from rest_framework_simplejwt.authentication import JWTAuthentication
-from gyms.models import BodyMeasurements, CompletedWorkoutGroups, CompletedWorkoutItems, CompletedWorkouts, Gyms, GymClasses, WorkoutCategories, Workouts, WorkoutItems, WorkoutNames, Coaches, ClassMembers, GymClassFavorites, GymFavorites, LikedWorkouts, WorkoutGroups, WorkoutDualItems
+from gyms.models import BodyMeasurements, CompletedWorkoutDualItems, CompletedWorkoutGroups, CompletedWorkoutItems, CompletedWorkouts, Gyms, GymClasses, WorkoutCategories, Workouts, WorkoutItems, WorkoutNames, Coaches, ClassMembers, GymClassFavorites, GymFavorites, LikedWorkouts, WorkoutGroups, WorkoutDualItems
 from django.db.models import Q, Exists
 
 from .s3 import s3Client
@@ -1387,6 +1387,55 @@ class CompletedWorkoutGroupsViewSet(DestroyWithPayloadMixin, viewsets.ModelViewS
     serializer_class = CompletedWorkoutGroupsSerializer
     permission_classes = [CompletedWorkoutGroupsPermission]
 
+    def create_items(self, request, workout_items, completed_workout_id):
+        allItems = []
+        for item in workout_items:
+            _item = {**item}
+            name = _item['name']
+            del _item['date']
+            del _item['name']
+            del _item['id']
+            del _item['workout']
+            _item['user_id'] = request.user.id
+            _item['completed_workout'] = completed_workout_id
+
+            allItems.append(
+                CompletedWorkoutItems(
+                    **{
+                        **_item,
+                        "completed_workout": CompletedWorkouts(id=completed_workout_id),
+                        "name": WorkoutNames(id=name['id']),
+                        'user_id': request.user.id
+                    }
+                )
+            )
+        return allItems
+
+    def record_dualitems(self, request, workout_items, completed_workout_id):
+        allItems = []
+        for item in workout_items:
+            _item = {**item}
+            name = _item['name']
+            del _item['date']
+            del _item['name']
+            del _item['id']
+            del _item['workout']
+            _item['user_id'] = request.user.id
+            _item['completed_workout'] = completed_workout_id
+
+            allItems.append(
+                CompletedWorkoutDualItems(
+                    **{
+                        **_item,
+                        "completed_workout": CompletedWorkouts(id=completed_workout_id),
+                        "name": WorkoutNames(id=name['id']),
+                        'user_id': request.user.id,
+                    }
+                )
+            )
+        return allItems
+
+
     def create(self, request):
         ''' Create a completed workout group w/ media, workouts and workout items.
             1. CreateCWG
@@ -1451,8 +1500,12 @@ class CompletedWorkoutGroupsViewSet(DestroyWithPayloadMixin, viewsets.ModelViewS
         #     print("Error uploading media:", e)
         #     return Response(to_err("Error uploading media"))
 
+
+        # A list of item will come in that are Normal or Dual
+        #
         try:
             allItems = []
+            allDualItems = []
             for w in workouts:
                 _w = {**w}
                 print("Workout to add as completed", w)
@@ -1470,28 +1523,18 @@ class CompletedWorkoutGroupsViewSet(DestroyWithPayloadMixin, viewsets.ModelViewS
                     'workout_id': workout_id
                 })
 
-                for item in workout_items:
-                    _item = {**item}
-                    name = _item['name']
-                    del _item['date']
-                    del _item['name']
-                    del _item['id']
-                    del _item['workout']
-                    _item['user_id'] = request.user.id
-                    _item['completed_workout'] = completed_workout.id
 
-                    allItems.append(
-                        CompletedWorkoutItems(
-                            **{
-                                **_item,
-                                "completed_workout": CompletedWorkouts(id=completed_workout.id),
-                                "name": WorkoutNames(id=name['id']),
-                                'user_id': request.user.id
-                            }
-                        )
-                    )
+                # Depending on the workout scheme type, we will have regular items
+                # Or we will have dual items.
+                if _w["scheme_type"] <= 2:
+                    print("Attempt create items")
+                    allItems.extend(self.create_items( request, workout_items, completed_workout.id))
+                else:
+                    print("Attempt create dual items")
+                    allDualItems.extend(self.record_dualitems( request, workout_items, completed_workout.id))
 
             CompletedWorkoutItems.objects.bulk_create(allItems)
+            CompletedWorkoutDualItems.objects.bulk_create(allDualItems)
 
         except Exception as e:
             comp_workout_group.delete()  # undo step one, should delete all foregin keys

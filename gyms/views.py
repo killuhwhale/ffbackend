@@ -1954,7 +1954,7 @@ class ProfileViewSet(viewsets.ViewSet):
         data = dict()
 
         wgs = WorkoutGroups.objects.filter(
-            owner_id=user_id, owned_by_class=False).order_by('for_date')
+            owner_id=user_id, owned_by_class=False, archived=False).order_by('for_date')
         cwgs = CompletedWorkoutGroups.objects.filter(
             user_id=user_id).order_by('for_date')
         data['created_workout_groups'] = wgs
@@ -1998,6 +1998,7 @@ class StatsViewSet(viewsets.ViewSet):
         wgs = WorkoutGroups.objects.filter(
             owned_by_class=False,
             owner_id=user_id,
+            archived=False,
             for_date__gte= start,
             for_date__lte= end,
         )

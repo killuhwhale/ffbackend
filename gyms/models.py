@@ -91,6 +91,7 @@ class Workouts(models.Model):
     scheme_type = models.IntegerField(default=0)  # 0, 1, 2
     scheme_rounds = models.CharField(
         max_length=100, default="[]")  # Json stringified list [] rounds/ rep-scheme (not used in weightlifting scheme)
+    instruction =  models.CharField(max_length=500, default="")
     date = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -204,6 +205,7 @@ class CompletedWorkouts(models.Model):
     scheme_type = models.IntegerField(default=0)  # duplicated from OG
     scheme_rounds = models.CharField(
         max_length=100, default="[]")  # duplicated from OG
+    instruction =  models.CharField(max_length=500, default="")
     date = models.DateTimeField(auto_now_add=True)
 
     class Meta:

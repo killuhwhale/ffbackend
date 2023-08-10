@@ -28,7 +28,7 @@ def get_user_by_customer_id(stripe_obj) -> Union[UserType, None]:
         customer_id = stripe_obj.customer
         return User.objects.get(customer_id=customer_id)
     except Exception as e:
-        logger.critical(f"Failed to find user.", e)
+        logger.critical(f"Failed to find user w/ {customer_id=}.", e)
     return None
 
 def get_future_datetime(dt: datetime) -> datetime:

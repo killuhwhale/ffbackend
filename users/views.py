@@ -95,10 +95,9 @@ class UserViewSet(viewsets.ModelViewSet):
         '''Deprecated. Sub is updated via webhooks.'''
         # if request.user:
 
-        #     subbed = request.data.get("subscribed")
+        #     subbed = request.data.get("__SUBSCRIBED")
         #     sub_end_date = request.data.get("sub_end_date")
         #     user = User.objects.get(id=request.user.id)
-        #     user.subscribed = subbed
         #     user.sub_end_date = sub_end_date
         #     user.save()
 

@@ -11,7 +11,7 @@ class TokenObtainPairSerializer(TokenObtainPairSerializer):
 class UserCreateSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
         model = get_user_model()
-        fields = ['email', 'username', 'password', 'id', 'subscribed', 'sub_end_date',]
+        fields = ['email', 'username', 'password', 'id', 'sub_end_date',]
 
     def create(self, validated_data):
         return get_user_model().objects.create_user(**validated_data)
@@ -20,7 +20,7 @@ class UserCreateSerializer(serializers.HyperlinkedModelSerializer):
 class UserSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
         model = get_user_model()
-        fields = ['username', 'email', 'id', 'subscribed', 'sub_end_date', 'customer_id']
+        fields = ['username', 'email', 'id',  'sub_end_date', 'customer_id']
 
 
 class UserWithoutEmailSerializer(serializers.HyperlinkedModelSerializer):

@@ -129,7 +129,6 @@ class User(AbstractUser):
     # Used for Time-Based One-Time Password Algorithm key
     secret = models.CharField(_('secret'), max_length=32, blank=True, null=True)
     customer_id = models.CharField(_('customer_id'), max_length=64, blank=True, null=True)
-    subscribed = models.BooleanField(_('subscribed'), default=False)
     sub_end_date = models.DateTimeField(_('sub_end_date'), default=datetime.now() - timedelta(days=1))
     objects = UserManager()
 

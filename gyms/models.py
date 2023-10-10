@@ -13,9 +13,6 @@ class Gyms(models.Model):
     class Meta:
         unique_together = [["title", "owner_id"]]
 
-
-
-
 class GymClasses(models.Model):
     gym = models.ForeignKey(Gyms, on_delete=models.CASCADE)
     title = models.CharField(max_length=50)
@@ -26,7 +23,6 @@ class GymClasses(models.Model):
     class Meta:
         unique_together = [["title", "gym"]]
 
-
 class Coaches(models.Model):
     user_id = models.CharField(max_length=100)
     gym_class = models.ForeignKey(GymClasses, on_delete=models.CASCADE)
@@ -34,7 +30,6 @@ class Coaches(models.Model):
 
     class Meta:
         unique_together = [["user_id", "gym_class"]]
-
 
 class ClassMembers(models.Model):
     user_id = models.CharField(max_length=100)
@@ -72,7 +67,7 @@ class WorkoutGroups(models.Model):
     finished = models.BooleanField(default=False)
     for_date = models.DateTimeField()  # Date the Workout is intended for
     title = models.CharField(max_length=50, blank=False, null=False)
-    caption = models.CharField(max_length=250)
+    caption = models.CharField(max_length=280)
     media_ids = models.CharField(max_length=1000, default='[]')  # json
     date = models.DateTimeField(auto_now_add=True)
     archived = models.BooleanField(default=False)
@@ -86,7 +81,7 @@ class WorkoutGroups(models.Model):
 class Workouts(models.Model):
     group = models.ForeignKey(WorkoutGroups, on_delete=models.CASCADE)
     title = models.CharField(max_length=50, null=False, blank=False)
-    desc = models.CharField(max_length=250)
+    desc = models.CharField(max_length=280)
     # Schemas: Round, Rep, Weightlifting
     scheme_type = models.IntegerField(default=0)  # 0, 1, 2
     scheme_rounds = models.CharField(
@@ -184,8 +179,8 @@ class CompletedWorkoutGroups(models.Model):
     workout_group = models.ForeignKey(
         WorkoutGroups, on_delete=models.DO_NOTHING)
     user_id = models.CharField(max_length=100)
-    title = models.CharField(max_length=250)
-    caption = models.CharField(max_length=250)
+    title = models.CharField(max_length=50)
+    caption = models.CharField(max_length=280)
     media_ids = models.CharField(max_length=1000, default='[]')  # json
     date = models.DateTimeField(auto_now_add=True)
     for_date = models.DateTimeField()  # Date the Workout is intended for
@@ -200,7 +195,7 @@ class CompletedWorkouts(models.Model):
     workout = models.ForeignKey(Workouts, on_delete=models.CASCADE)
     user_id = models.CharField(max_length=100)
     title = models.CharField(max_length=50)  # duplicated from OG
-    desc = models.CharField(max_length=250)  # duplicated from OG
+    desc = models.CharField(max_length=280)  # duplicated from OG
     # Schemas: Round, Rep, Weightlifting
     scheme_type = models.IntegerField(default=0)  # duplicated from OG
     scheme_rounds = models.CharField(

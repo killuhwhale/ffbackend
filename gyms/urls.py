@@ -17,6 +17,8 @@ router.register(r'coaches', views.CoachesViewSet)
 router.register(r'classMembers', views.ClassMembersViewSet)
 router.register(r'profile', views.ProfileViewSet, basename='profile')
 router.register(r'stats', views.StatsViewSet, basename='stats')
+router.register(r'account', views.RemoveAccount, basename='account')
+router.register(r'snapshot', views.SnapshotViewSet, basename='snapshot')
 # router.register(r'bodyMeasurements', views.BodyMeasurementsViewSet)
 
 

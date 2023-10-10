@@ -1,21 +1,25 @@
 from datetime import datetime, time, timedelta, timezone
 from enum import Enum
+from django.core.files.uploadedfile import InMemoryUploadedFile, TemporaryUploadedFile
+from django.contrib.auth import get_user_model
 from django.db import transaction
-from django.db.utils import InternalError
-import environ
-from django.core.serializers import serialize
+from django.db.utils import InternalError, IntegrityError
+from django.db.models import Q
 from itertools import chain
-import json
-import pytz
-from typing import Any, Dict, List
+from PIL import Image
 from rest_framework import viewsets, status
 from rest_framework.parsers import JSONParser, MultiPartParser, FormParser, FileUploadParser
 from rest_framework.decorators import action
 from rest_framework.permissions import BasePermission, SAFE_METHODS
 from rest_framework.response import Response
+from typing import Any, Dict, List
+import environ
+import json
+import pytz
 from gyms.serializers import (
     CombinedWorkoutGroupsAsWorkoutGroupsSerializer, CompletedWorkoutCreateSerializer, CompletedWorkoutGroupsSerializer,
-    CompletedWorkoutSerializer, GymClassSerializerWithWorkoutsCompleted, ProfileGymClassFavoritesSerializer, ProfileGymFavoritesSerializer, ProfileWorkoutGroupsSerializer, UserSerializer, UserWithoutEmailSerializer,
+    CompletedWorkoutSerializer, GymClassSerializerWithWorkoutsCompleted, ProfileGymClassFavoritesSerializer, ProfileGymFavoritesSerializer,
+    ProfileWorkoutGroupsSerializer, UserSerializer, UserWithoutEmailSerializer,
     WorkoutCategorySerializer, GymSerializerWithoutClasses,
     BodyMeasurementsSerializer, Gym_ClassSerializer, GymSerializer, GymClassCreateSerializer,
     GymClassSerializer, GymClassSerializerWithWorkouts, WorkoutGroupsCreateSerializer, WorkoutSerializer,
@@ -25,15 +29,13 @@ from gyms.serializers import (
     GymClassFavoritesSerializer, GymFavoritesSerializer, LikedWorkoutsSerializer, WorkoutGroupsSerializer,
     WorkoutCreateSerializer, ProfileSerializer
 )
-from rest_framework_simplejwt.authentication import JWTAuthentication
-from gyms.models import BodyMeasurements, CompletedWorkoutDualItems, CompletedWorkoutGroups, CompletedWorkoutItems, CompletedWorkouts, Gyms, GymClasses, WorkoutCategories, Workouts, WorkoutItems, WorkoutNames, Coaches, ClassMembers, GymClassFavorites, GymFavorites, LikedWorkouts, WorkoutGroups, WorkoutDualItems
-from django.db.models import Q, Exists
 
+from gyms.models import (BodyMeasurements, CompletedWorkoutDualItems, CompletedWorkoutGroups, CompletedWorkoutItems,
+                        CompletedWorkouts, Gyms, GymClasses, ResetPasswords, WorkoutCategories, Workouts, WorkoutItems, WorkoutNames,
+                        Coaches, ClassMembers, GymClassFavorites, GymFavorites, LikedWorkouts, WorkoutGroups, WorkoutDualItems)
+from utils import rev_preserve_day
 from .s3 import s3Client
-from django.core.files.uploadedfile import InMemoryUploadedFile, TemporaryUploadedFile
-from PIL import Image
-from django.contrib.auth import get_user_model
-from itertools import chain
+
 
 
 tz = pytz.timezone("US/Pacific")
@@ -2028,4 +2030,146 @@ class StatsViewSet(viewsets.ViewSet):
                 ).data
             ))
         )
+
+
+
+
+
+@transaction.atomic
+def delete_user_data(user_id, user_email):
+    try:
+        # 1. Delete records in GymClassFavorites
+        GymClassFavorites.objects.filter(user_id=user_id).delete()
+
+        # 2. Delete records in GymFavorites
+        GymFavorites.objects.filter(user_id=user_id).delete()
+
+        # 3. Delete records in WorkoutGroups
+        # Fetch all WorkoutGroups for the above GymClasses ids and user's personal workoutgroups.
+        gym_class_ids = [str(r) for r in GymClasses.objects.filter(gym__owner_id=user_id).values_list('id', flat=True)]
+        print("GymClass ids: ", type(gym_class_ids[0]), gym_class_ids)
+
+        combined_filter = Q(owner_id=user_id, owned_by_class=False) | Q(owner_id__in=gym_class_ids, owned_by_class=True)
+        WorkoutGroups.objects.filter(combined_filter).delete()
+
+        # 4. Delete records in CompletedWorkoutGroups
+        CompletedWorkoutGroups.objects.filter(user_id=user_id).delete()
+
+        # 5. Delete records in ClassMembers
+        ClassMembers.objects.filter(user_id=user_id).delete()
+
+        # 6. Delete records in Coaches
+        Coaches.objects.filter(user_id=user_id).delete()
+
+        # 7. Delete GymClasses where related Gyms have the owner_id matching the user_id
+        GymClasses.objects.filter(gym__owner_id=user_id).delete()
+
+        # 8. Delete Gyms owned by the user
+        Gyms.objects.filter(owner_id=user_id).delete()
+
+        # 8. Delete reset password codes stored
+        ResetPasswords.objects.filter(email=user_email).delete()
+
+        # 9. Delete User
+        User.objects.filter(id=user_id).delete()
+        return True, ""  # Success!
+    except IntegrityError as ie:
+        # This catches database integrity errors, which might be the most common issue.
+        return False, str(ie)
+    except Exception as e:
+        # Optional: You can catch other exceptions and log or handle them if needed.
+        print(f"An error occurred: {e}")
+        return False, str(e)
+
+
+class RemoveAccount(viewsets.ViewSet):
+    '''
+     Returns workouts between a range of dates either for a user's workouts or a classes workouts.
+    '''
+    @action(detail=False, methods=['POST'], permission_classes=[])
+    def remove(self, request, pk=None):
+        try:
+            email = request.data['email']
+            user = User.objects.get(email=email)
+            print("Attempting to remove account and data associated with user: ", user)
+            print("Need to think about how to remove an account.... Delete their gyms and classes? Mark them as archived? just dont show on search. Remove all workouts and completed workouts, favorites, coach and members")
+            deleted, err = delete_user_data(user.id, user.email)
+            if deleted:
+                return Response({"success": True, "error": ""})
+            return Response({"success": False, "error": err})
+
+        except Exception as e:
+            print(f"Failed to remove account: ", e)
+            return Response({"success": False, "error": str(e)})
+
+def replace_tz_with_UTC(local_date, user_tz):
+    """Replaces the local date with UTC TZ"""
+
+    local_datetime = datetime.combine(local_date, datetime.min.time())
+    user_timezone = pytz.timezone(user_tz)
+    localized_dt = user_timezone.localize(local_datetime)
+
+    # Convert this to UTC without changing the day, month, or year
+    return localized_dt.astimezone(pytz.utc)
+
+
+class SnapshotViewSet(viewsets.ViewSet):
+    '''
+     Returns workouts between a range of dates either for a user's workouts or a classes workouts.
+    '''
+    @action(detail=False, methods=['GET'], permission_classes=[])
+    def user_daily(self, request, pk=None):
+        user_id = request.user.id
+        # Date given            2023-10-09
+        # Date stored in DB as  2023-10-09 00:00:00+00
+        # Start                 2023-10-09 00:00:00-07
+        # End                   2023-10-09 23:59:59-07
+
+        data = dict()
+        today = datetime.now(pytz.timezone(request.tz)).date()
+        today = replace_tz_with_UTC(today, request.tz)
+        start = datetime.combine(today, time.min).strftime("%Y-%m-%d %H:%M:%S%z")
+        end = datetime.combine(today, time.max).strftime("%Y-%m-%d %H:%M:%S%z")
+        print("Daily snapshot date: ", today)
+        print("Daily snapshot Start date: ", start)
+        print("Daily snapshot End date: ", end)
+
+
+
+        wgs = WorkoutGroups.objects.filter(
+            owned_by_class=False,
+            owner_id=user_id,
+            archived=False,
+            for_date__gte= start,
+            for_date__lte= end,
+        )
+        cwgs = CompletedWorkoutGroups.objects.filter(
+            user_id=user_id,
+            for_date__gte= start,
+            for_date__lte= end,
+        )
+        print('\n', f"Found user daily workouts ({user_id=}):", '\n',)
+        for wg in wgs:
+            print(wg.for_date)
+        print()
+
+
+        data['created_workout_groups'] = wgs
+        data['completed_workout_groups'] = cwgs
+
+        return Response(
+            list(chain(
+                WorkoutGroupsSerializer(
+                    wgs,
+                    context={'request': request, },
+                    many=True
+                ).data,
+                CompletedWorkoutGroupsSerializer(
+                    cwgs,
+                    context={'request': request, },
+                    many=True
+                ).data
+            ))
+        )
+
 

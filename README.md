@@ -72,6 +72,29 @@ https://www.digitalocean.com/community/tutorials/how-to-set-up-django-with-postg
 - WorkoutGroups 15 per day
 - CompletedWorkoutGroups 15 per day
 
+
+
+
+
+
+
+
+20 emom
+1. Squat                     x10
+1. Seated Shoulder press     x10
+
+ 3x45s ea
+1. up-cross over down-cross
+2. Bottomr, cross over top and back
+3. Around the world
+4. Push up pulls
+
+
+
+
+
+
+
 # Docker Usage
 ## Prod
  docker compose -f docker-compose_prod.yml up
@@ -420,3 +443,13 @@ Fitness Platform
     /^profile/workout_groups\.(?P<format>[a-z0-9]+)/?$ []
     /^stats/(?P<pk>[^/.]+)/user_workouts/$ []
     /^stats/(?P<pk>[^/.]+)/user_workouts\.(?P<format>[a-z0-9]+)/?$ []
+
+
+
+
+
+
+
+
+
+

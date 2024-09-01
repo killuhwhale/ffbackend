@@ -164,17 +164,7 @@ class ConfirmEmailViewSet(viewsets.ViewSet):
                 </style>
             </head>
             <body>
-
-<p style="text-align:left;">
-        <p>                ______         _____              _                            </p>
-        <p>                | ___ \       |_   _|            | |                           </p>
-        <p>                | |_/ /___ _ __ | |_ __ __ _  ___| | ___ __ _ __               </p>
-        <p>                |    // _ \ '_ \| | '__/ _` |/ __| |/ / '__| '__|              </p>
-        <p>                | |\ \  __/ |_) | | | | (_| | (__|   <| |  | |                 </p>
-        <p>                \_| \_\___| .__/\_/_|  \__,_|\___|_|\_\_|  |_|                 </p>
-        <p>                        | |                                                    </p>
-        <p>                        |_|                                                    </p>
-</p>
+                <img src="" />
 
                 <div class="container">
                     <h1>{verified_msg}</h1>

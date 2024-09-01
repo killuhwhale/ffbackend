@@ -14,12 +14,12 @@ logger = logging.getLogger(__name__)
 def get_user_timezone(request):
     g = GeoIP2()
     user_ip = request.META.get('REMOTE_ADDR')
-    print('get_user_timezone', user_ip)
+    logger.log('get_user_timezone', user_ip)
     if user_ip:
         try:
             # Get the user's timezone based on their IP address
             user_timezone = g.city(user_ip)['time_zone']
-            print(f"user_timezone: {user_timezone=}")
+            logger.log(f"user_timezone: {user_timezone=}")
             return user_timezone
         except:
             pass
@@ -39,9 +39,10 @@ class JWTMiddleware:
 
         if request.path in ['/hooks/webhook/', '/login/', '/register/', '/token/', '/token/refresh/', '/users/', '/user/send_reset_code/', '/user/reset_password/', '/emailvalidation/confirm_email/', '/emailvalidation/send_confirmation_email']:
             if request.path == "/users/" and not request.method == "POST":
-                print("Needs access token... go along and procedd")
+                logger.log(f"Needs access token  for this users request, only post is bypassed... {request.method=}",)
                 # return JsonResponse({'error': f'Invalid access token, route not permitted '}, status=401)
             else:
+                logger.log("No access token needed... ")
                 response = self.get_response(request)
                 return response
 
@@ -70,7 +71,7 @@ class TzMiddleware:
     def __call__(self, request):
         # logger.critical(f"middleware req: {request=} {request.method=}, {request.path=} ")
         tz = get_user_timezone(request)
-        print("TZMiddleware: ", tz)
+        logger.log("TZMiddleware: ", tz)
         if tz is not None:
             request.tz = tz
 

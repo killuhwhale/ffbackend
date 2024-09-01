@@ -240,6 +240,7 @@ def createWorkoutItemWithDuration(workout, name, sets, duration, weights, order)
 clean= WorkoutNames.objects.get(
     name= 'Clean',
 )
+
 rollsesh= WorkoutNames.objects.get(
     name= 'Rolling Sesh',
 )
@@ -270,21 +271,22 @@ bench= WorkoutNames.objects.get(
     name= 'Bench Press',
 )
 db_bench= WorkoutNames.objects.get(
-    name= 'Dumbbell Chest Press',
+    name= 'DB Chest Press',
 )
+print("Got workout name!")
 db_bentover_row= WorkoutNames.objects.get(
-    name= 'Dumbbell Bent Over Row',
+    name= 'DB Rear Delt Row',
 )
 side_plank= WorkoutNames.objects.get(
     name= 'Side Plank',
 )
 
 
+
 # Wednesday
 hill_sprints= WorkoutNames.objects.get(
     name= 'Hill Sprints',
 )
-
 
 # Thursday
 deadlift= WorkoutNames.objects.get(

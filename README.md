@@ -1,3 +1,41 @@
+# Google Drive Link
+
+https://docs.google.com/document/d/1QtKaH68WTCxmLotRMc2nixt8vxDa7ziKiVWk8xLwTz4/edit?usp=sharing
+
+
+
+# QuickStart
+
+``` Backend
+cd ~/ws_p38/fitform/ffbackend && docker compose -f docker-compose_prod.yml up
+```
+
+``` Emu - FrontEnd App
+emulator -noaudio -avd Pixel_4_API_30 &
+cd ~/ws_p38/fitform/RepTracker && adb -s emulator-5554 reverse tcp:8000 tcp:8000 &&  adb -s emulator-5554 reverse tcp:8081 tcp:8081 && npx expo run:android
+```
+
+
+
+# Expo
+Google Ads do not work with expo
+
+## Build
+cd ~/ws_p38/fitform/RepTracker && bash buildAndroidAPK.sh com.fitform
+cd ~/ws_p38/fitform/RepTracker &&
+
+
+## Build without EAS
+
+### Setup - Allows Google Ads to work with Expo
+npx expo install expo-build-properties
+
+### Run expo app
+emulator -noaudio -avd Pixel_4_API_30 &
+npx expo prebuild
+npx expo run:android
+
+
 psql -U gym_admin instafit_master
 sudo -u postgres psql -U gym_admin -d instafit_master -h 127.0.0.1
 
@@ -5,9 +43,17 @@ sudo -u postgres psql -U gym_admin -d instafit_master -h 127.0.0.1
 
 stripe listen --forward-to localhost:8000/hooks/webhook/
 
-ssh killuh@164.92.104.164
+
+# App Notes
+1. CompeltedWorkoutGroups and <Compelted*> are not used. This is used to complete another WorkoutGroup from another user.
+    - This is allows to track the original workout and have the user add their own metrics to the workout or modify it.
+    - Good for classes to post a workout and a user to "Complete" it basically use as a template and track the original so the user can manually compare
+
+
+
 
 # TODO()
+- Add media for workoutnames...
 - Update live db with new limits, so reset the database and restart...
 - Update both sites on Prod
 
@@ -54,8 +100,8 @@ https://www.digitalocean.com/community/tutorials/how-to-set-up-django-with-postg
     postgres=# create user myuser with encrypted password 'mypass';
     postgres=# grant all privileges on database mydb to myuser;
 
-    alter user gym_admin with encrypted password 'mostdope';
-    create user gym_admin with encrypted password 'mostdope';
+    alter user gym_admin with encrypted password 'pass';
+    create user gym_admin with encrypted password 'pass';
     create database instafit_master;
     grant all privileges on database instafit_master to gym_admin;
 
@@ -97,11 +143,13 @@ https://www.digitalocean.com/community/tutorials/how-to-set-up-django-with-postg
 
 # Docker Usage
 ## Prod
+ cd ffbackend/
  docker compose -f docker-compose_prod.yml up
  docker compose -f docker-compose_prod.yml exec instafitapiprod bash migrate_create.sh
  docker compose -f docker-compose_prod.yml exec instafitapiprod pip install -r requirements.txt
  docker compose -f docker-compose_prod.yml exec instafitapiprod python manage.py makemigrations gyms
  docker compose -f docker-compose_prod.yml exec instafitapiprod python manage.py migrate gyms
+ docker compose -f docker-compose_prod.yml exec -T instafitapiprod python manage.py shell <  gyms/create_workout_names.py
  docker compose -f docker-compose_prod.yml exec -T instafitapiprod python manage.py shell <  gyms/create_test_data.py
  docker compose -f docker-compose_prod.yml down
 
@@ -136,12 +184,6 @@ git merge origin/staging
 git branch -M staging
 git push origin HEAD
 
-
-curl -X PUT \
--H "Content-Type: application/json" \
--H "Authorization: Bearer dop_v1_8fb7d26bb6801733c39e34929c06a5e458e86bfde4b9fc874d4c40b74a76fa3d" \
--d '{"rules": [{"type": "ip_addr","value": "192.168.1.1"},{"type": "droplet","value": "163973392"},{"type": "k8s","value": "ff2a6c52-5a44-4b63-b99c-0e98e7a63d61"},{"type": "tag","value": "backend"}]}' \
-"https://api.digitalocean.com/v2/databases/9cc10173-e9ea-4176-9dbc-a4cee4c4ff30/firewall"
 
 # Create new migrations for Trigger
 python manage.py makemigrations --empty gyms --name tigger_limit_
@@ -214,6 +256,7 @@ https://developers.google.com/identity/one-tap/android/idtoken-auth
         - Curerntly limited to 5MB
         - Error is:
             - error cannot pickle '_io.BufferedRandom' object
+
 
 
 # Testing

@@ -1,4 +1,5 @@
-from datetime import datetime, time, timedelta, timezone
+from datetime import datetime, time, timedelta
+from django.utils import timezone
 from enum import Enum
 from django.core.files.uploadedfile import InMemoryUploadedFile, TemporaryUploadedFile
 from django.contrib.auth import get_user_model
@@ -46,6 +47,9 @@ User = get_user_model()
 
 # When determining membership status give extra days.
 MEMBERSHIP_LEEWAY = 0
+
+# Limit for non members on how many workoutgroups they can create in a single day
+NON_MEMBER_LIMIT = 1
 
 GYM_FILES = 0
 CLASS_FILES = 1
@@ -336,21 +340,25 @@ def check_users_workouts_and_completed_today(request):
     # Check for a workoutGroup created today by user. If no workout, return True allow create
     user = request.user
     tz = request.tz
-    today = datetime.now( pytz.timezone(tz)).date()
+    # today = datetime.now( pytz.timezone(tz)).date()
+
+    today = timezone.now().date()
+
     workoutGroups = WorkoutGroups.objects.filter(
         owner_id=user.id,
         owned_by_class=False,
+        archived=False,
         date__date=today
     )
+    return len(workoutGroups) < NON_MEMBER_LIMIT
+    # if len(workoutGroups) > 0:
+    #     return False
 
-    if len(workoutGroups) > 0:
-        return False
-
-    completedWorkoutGroups = CompletedWorkoutGroups.objects.filter(
-        user_id=user.id,
-        date__date=today
-    )
-    return len(completedWorkoutGroups) == 0 # Allow if nothing is created today
+    # completedWorkoutGroups = CompletedWorkoutGroups.objects.filter(
+    #     user_id=user.id,
+    #     date__date=today
+    # )
+    # return len(completedWorkoutGroups) == 0 # Allow if nothing is created today
 
 class WorkoutGroupsPermission(BasePermission):
     message = """Only users can create/delete workouts for themselves or
@@ -1157,7 +1165,7 @@ class WorkoutGroupsViewSet(viewsets.ModelViewSet, WorkoutGroupsPermission):
         queryset = queryset[:40]
         return queryset
 
-class WorkoutsViewSet(DestroyWithPayloadMixin, viewsets.ModelViewSet, WorkoutPermission):
+class WorkoutsViewSet(viewsets.ModelViewSet, DestroyWithPayloadMixin, WorkoutPermission):
     """
     API endpoint that allows users to be viewed or edited.
     """
@@ -1181,6 +1189,18 @@ class WorkoutsViewSet(DestroyWithPayloadMixin, viewsets.ModelViewSet, WorkoutPer
             return Response(to_err("Workout with this data already exists."))
 
         return Response(WorkoutCreateSerializer(workout).data)
+
+
+    # Only need this if we inlcude CompletedWorkouts
+    # def retrieve(self, request, *args, **kwargs):
+    #     # workout_id = request.data.get('id')
+    #     workout_id = kwargs.get('pk')
+    #     print("Custom retrieve for workout! need completed workouts as well....")
+    #     try:
+    #         workout = Workouts.objects.get(id=workout_id)
+    #     except Exception as err:
+    #         print(f"Error getting workout by id: {err=}")
+    #     return Response(WorkoutSerializer(workout).data)
 
     def get_serializer_class(self):
         if self.action == 'list' or self.action == 'retrieve':
@@ -2143,19 +2163,19 @@ class SnapshotViewSet(viewsets.ViewSet):
             for_date__gte= start,
             for_date__lte= end,
         )
-        cwgs = CompletedWorkoutGroups.objects.filter(
-            user_id=user_id,
-            for_date__gte= start,
-            for_date__lte= end,
-        )
+        # cwgs = CompletedWorkoutGroups.objects.filter(
+        #     user_id=user_id,
+        #     for_date__gte= start,
+        #     for_date__lte= end,
+        # )
         print('\n', f"Found user daily workouts ({user_id=}):", '\n',)
         for wg in wgs:
             print(wg.for_date)
-        print()
+        print("--END_DAILY_WORKOUT--")
 
 
         data['created_workout_groups'] = wgs
-        data['completed_workout_groups'] = cwgs
+        # data['completed_workout_groups'] = cwgs
 
         return Response(
             list(chain(
@@ -2164,11 +2184,11 @@ class SnapshotViewSet(viewsets.ViewSet):
                     context={'request': request, },
                     many=True
                 ).data,
-                CompletedWorkoutGroupsSerializer(
-                    cwgs,
-                    context={'request': request, },
-                    many=True
-                ).data
+                # CompletedWorkoutGroupsSerializer(
+                #     cwgs,
+                #     context={'request': request, },
+                #     many=True
+                # ).data
             ))
         )
 

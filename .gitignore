@@ -5,3 +5,4 @@ instafitAPI/.env
 instafitAPI/__pycache__/
 users/__pycache__/
 
+node_modules

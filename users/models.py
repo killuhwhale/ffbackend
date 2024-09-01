@@ -73,35 +73,39 @@ class UserManager(BaseUserManager):
             return None
 
     def _create_user(self, email, password, **extra_fields):
-        if not email:
-            raise ValueError('Users require an email field')
-        email = self.normalize_email(email)
+        try:
+            if not email:
+                raise ValueError('Users require an email field')
+            email = self.normalize_email(email)
 
-        # Prevents an issue with:
-        # TypeError: Direct assignment to the forward side of a many-to-many set is prohibited. Use groups.set() instead.
-        # However, we most likely wont need to add perms or groups at time of creation.
-        # groups = extra_fields['groups']
-        # perms = extra_fields['user_permissions']
+            # Prevents an issue with:
+            # TypeError: Direct assignment to the forward side of a many-to-many set is prohibited. Use groups.set() instead.
+            # However, we most likely wont need to add perms or groups at time of creation.
+            # groups = extra_fields['groups']
+            # perms = extra_fields['user_permissions']
 
-        extra_fields['is_active'] = False
-        if self.TESTING:
-            extra_fields['is_active'] = True
+            extra_fields['is_active'] = False
+            if self.TESTING:
+                extra_fields['is_active'] = True
 
 
-        if "groups" in extra_fields:
-            del extra_fields['groups']
-        if "user_permissions" in extra_fields:
-            del extra_fields['user_permissions']
+            if "groups" in extra_fields:
+                del extra_fields['groups']
+            if "user_permissions" in extra_fields:
+                del extra_fields['user_permissions']
 
-        user: User = self.model(email=email, secret=pyotp.random_base32(), **extra_fields)
-        customer_id = self._create_stripe_customer(email)
-        logger.critical(f"Setting customer_id: {customer_id=}")
-        logger.critical(f"Setting password: {password=}")
-        user.customer_id = customer_id
-        user.set_password(password)
-        user.save()
-        self.send_confirmation_email(email)
-        return user
+            user: User = self.model(email=email, secret=pyotp.random_base32(), **extra_fields)
+            customer_id = self._create_stripe_customer(email)
+            logger.critical(f"Setting customer_id: {customer_id=}")
+            logger.critical(f"Setting password: {password=}")
+            user.customer_id = customer_id
+            user.set_password(password)
+            user.save()
+            self.send_confirmation_email(email)
+            return user
+        except Exception as err:
+            logger.error(f"Error creating user: ", err)
+            return None
 
     def create_user(self, email, password=None, **extra_fields):
         logger.critical("Creating user!")

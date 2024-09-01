@@ -164,7 +164,7 @@ class ConfirmEmailViewSet(viewsets.ViewSet):
                 </style>
             </head>
             <body>
-                <img src="https://raw.githubusercontent.com/killuhwhale/ffbackend/main/reptrackrr.webp" width="50vw" />
+                <img src="https://raw.githubusercontent.com/killuhwhale/ffbackend/main/reptrackrr.webp" width="300px" />
 
                 <div class="container">
                     <h1>{verified_msg}</h1>

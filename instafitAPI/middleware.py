@@ -32,7 +32,7 @@ class JWTMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        logger.critical(f"middleware req: {request.method=}, {request.path=} ")
+        logger.debug(f"middleware req: {request.method=}, {request.path=} ")
         # Allow requests to endpoints without auth token
         if request.path == "/":
             return JsonResponse({'data': f'Hello world {request.path}'}, status=200)

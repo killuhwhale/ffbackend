@@ -14,7 +14,7 @@ class Migration(migrations.Migration):
             -- ARGS (TG_ARGV): max_rows, table_name
 
 
-            EXECUTE format('SELECT COUNT(*) FROM %s WHERE archived='f' and date = ''%s'' and owned_by_class = ''%s'' and owner_id = %s::varchar',TG_ARGV[1], NEW.for_date::date, NEW.owned_by_class, NEW.owner_id)
+            EXECUTE format('SELECT COUNT(*) FROM %s WHERE archived=''f'' and date = ''%s'' and owned_by_class = ''%s'' and owner_id = %s::varchar',TG_ARGV[1], NEW.for_date::date, NEW.owned_by_class, NEW.owner_id)
             INTO row_count;
 
 

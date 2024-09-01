@@ -33,7 +33,7 @@ configuration.api_key['api-key'] = env('SENDINBLUE_KEY')
 class UserManager(BaseUserManager):
     use_in_migrations = True
     TESTING = get_env("RUN_ENV") == "dev"
-    logger.critical(f"{TESTING=}")
+    logger.debug(f"UserManager {TESTING=}")
 
     def send_confirmation_email(self, email):
         ''' After register is called, this should be called,'''
@@ -96,8 +96,8 @@ class UserManager(BaseUserManager):
 
             user: User = self.model(email=email, secret=pyotp.random_base32(), **extra_fields)
             customer_id = self._create_stripe_customer(email)
-            logger.critical(f"Setting customer_id: {customer_id=}")
-            logger.critical(f"Setting password: {password=}")
+            logger.debug(f"Setting customer_id: {customer_id=}")
+            logger.debug(f"Setting password: {password=}")
             user.customer_id = customer_id
             user.set_password(password)
             user.save()
@@ -108,7 +108,7 @@ class UserManager(BaseUserManager):
             return None
 
     def create_user(self, email, password=None, **extra_fields):
-        logger.critical("Creating user!")
+        logger.debug("Creating user!")
 
         print("Creating user!!!")
         extra_fields.setdefault('is_staff', False)

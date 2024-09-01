@@ -166,50 +166,15 @@ class ConfirmEmailViewSet(viewsets.ViewSet):
             <body>
 
                     <pre>
-
-
-RRRRRRRRRRRRRRRRR                                        TTTTTTTTTTTTTTTTTTTTTTT                                                       kkkkkkkk
-R::::::::::::::::R                                       T:::::::::::::::::::::T                                                       k::::::k
-R::::::RRRRRR:::::R                                      T:::::::::::::::::::::T                                                       k::::::k
-RR:::::R     R:::::R                                     T:::::TT:::::::TT:::::T                                                       k::::::k
-  R::::R     R:::::R    eeeeeeeeeeee    ppppp   pppppppppTTTTTT  T:::::T  TTTTTTrrrrr   rrrrrrrrr   aaaaaaaaaaaaa      cccccccccccccccc k:::::k    kkkkkkkrrrrr   rrrrrrrrr   rrrrr   rrrrrrrrr
-  R::::R     R:::::R  ee::::::::::::ee  p::::ppp:::::::::p       T:::::T        r::::rrr:::::::::r  a::::::::::::a   cc:::::::::::::::c k:::::k   k:::::k r::::rrr:::::::::r  r::::rrr:::::::::r
-  R::::RRRRRR:::::R  e::::::eeeee:::::eep:::::::::::::::::p      T:::::T        r:::::::::::::::::r aaaaaaaaa:::::a c:::::::::::::::::c k:::::k  k:::::k  r:::::::::::::::::r r:::::::::::::::::r
-  R:::::::::::::RR  e::::::e     e:::::epp::::::ppppp::::::p     T:::::T        rr::::::rrrrr::::::r         a::::ac:::::::cccccc:::::c k:::::k k:::::k   rr::::::rrrrr::::::rrr::::::rrrrr::::::r
-  R::::RRRRRR:::::R e:::::::eeeee::::::e p:::::p     p:::::p     T:::::T         r:::::r     r:::::r  aaaaaaa:::::ac::::::c     ccccccc k::::::k:::::k     r:::::r     r:::::r r:::::r     r:::::r
-  R::::R     R:::::Re:::::::::::::::::e  p:::::p     p:::::p     T:::::T         r:::::r     rrrrrrraa::::::::::::ac:::::c              k:::::::::::k      r:::::r     rrrrrrr r:::::r     rrrrrrr
-  R::::R     R:::::Re::::::eeeeeeeeeee   p:::::p     p:::::p     T:::::T         r:::::r           a::::aaaa::::::ac:::::c              k:::::::::::k      r:::::r             r:::::r
-  R::::R     R:::::Re:::::::e            p:::::p    p::::::p     T:::::T         r:::::r          a::::a    a:::::ac::::::c     ccccccc k::::::k:::::k     r:::::r             r:::::r
-RR:::::R     R:::::Re::::::::e           p:::::ppppp:::::::p   TT:::::::TT       r:::::r          a::::a    a:::::ac:::::::cccccc:::::ck::::::k k:::::k    r:::::r             r:::::r
-R::::::R     R:::::R e::::::::eeeeeeee   p::::::::::::::::p    T:::::::::T       r:::::r          a:::::aaaa::::::a c:::::::::::::::::ck::::::k  k:::::k   r:::::r             r:::::r
-R::::::R     R:::::R  ee:::::::::::::e   p::::::::::::::pp     T:::::::::T       r:::::r           a::::::::::aa:::a cc:::::::::::::::ck::::::k   k:::::k  r:::::r             r:::::r
-RRRRRRRR     RRRRRRR    eeeeeeeeeeeeee   p::::::pppppppp       TTTTTTTTTTT       rrrrrrr            aaaaaaaaaa  aaaa   cccccccccccccccckkkkkkkk    kkkkkkk rrrrrrr             rrrrrrr
-                                         p:::::p
-                                         p:::::p
-                                        p:::::::p
-                                        p:::::::p
-                                        p:::::::p
-                                        ppppppppp
-
- ,ggggggggggg,                      ,ggggggggggggggg
-dP"""88""""""Y8,                   dP""""""88"""""""                           ,dPYb,
-Yb,  88      `8b                   Yb,_    88                                  IP'`Yb
- `"  88      ,8P                    `""    88                                  I8  8I
-     88aaaad8P"                            88                                  I8  8bgg,
-     88""""Yb,     ,ggg,   gg,gggg,        88  ,gggggg,    ,gggg,gg    ,gggg,  I8 dP" "8   ,gggggg,   ,gggggg,
-     88     "8b   i8" "8i  I8P"  "Yb       88  dP""""8I   dP"  "Y8I   dP"  "Yb I8d8bggP"   dP""""8I   dP""""8I
-     88      `8i  I8, ,8I  I8'    ,8igg,   88 ,8'    8I  i8'    ,8I  i8'       I8P' "Yb,  ,8'    8I  ,8'    8I
-     88       Yb, `YbadP' ,I8 _  ,d8' "Yb,,8P,dP     Y8,,d8,   ,d8b,,d8,_    _,d8    `Yb,,dP     Y8,,dP     Y8,
-     88        Y8888P"Y888PI8 YY88888P  "Y8P'8P      `Y8P"Y8888P"`Y8P""Y8888PP88P      Y88P      `Y88P      `Y8
-                           I8
-                           I8
-                           I8
-                           I8
-                           I8
-                           I8
-
-
-                    </pre>
+______         _____              _
+| ___ \       |_   _|            | |
+| |_/ /___ _ __ | |_ __ __ _  ___| | ___ __ _ __
+|    // _ \ '_ \| | '__/ _` |/ __| |/ / '__| '__|
+| |\ \  __/ |_) | | | | (_| | (__|   <| |  | |
+\_| \_\___| .__/\_/_|  \__,_|\___|_|\_\_|  |_|
+          | |
+          |_|
+</pre>
 
                 <div class="container">
                     <h1>{verified_msg}</h1>

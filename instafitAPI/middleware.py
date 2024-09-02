@@ -10,6 +10,8 @@ import logging
 User =  get_user_model()
 logger = logging.getLogger(__name__)
 
+from instafitAPI.settings import env, cenv
+
 
 def get_user_timezone(request):
     g = GeoIP2()
@@ -41,6 +43,12 @@ class JWTMiddleware:
             if request.path == "/users/" and not request.method == "POST":
                 logger.debug(f"Needs access token  for this users request, only post is bypassed... {request.method=}",)
                 # return JsonResponse({'error': f'Invalid access token, route not permitted '}, status=401)
+            elif request.path == "/hooks/revenuecat/":
+                    logger.debug(f"{env('REVENUECAT_TOKEN')=}")
+                    if request.META.get('HTTP_AUTHORIZATION') == env("REVENUECAT_TOKEN"):
+                        return response
+                    else:
+                        return JsonResponse({'error': 'Invalid access token'}, status=401)
             else:
                 logger.debug("No access token needed... ")
                 response = self.get_response(request)

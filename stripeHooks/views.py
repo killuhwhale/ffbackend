@@ -32,6 +32,13 @@ def get_user_by_customer_id(stripe_obj) -> Union[UserType, None]:
         logger.critical(f"Failed to find user w/ {customer_id=}.", e)
     return None
 
+def get_user_by_revenuecat_id(rc_id) -> Union[UserType, None]:
+    try:
+        return User.objects.get(revenuecat_id=rc_id)
+    except Exception as e:
+        logger.critical(f"Failed to find user w/ revenuecat {rc_id=}.", e)
+    return None
+
 def get_future_datetime(dt: datetime) -> datetime:
     '''Compares the given dt to the current datetime and returns the datetime that is furthest in the future.'''
     current_dt = datetime.now().replace(tzinfo=timezone.utc)
@@ -56,10 +63,123 @@ class HookViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=['POST'], permission_classes=[])
     def revenuecat(self, request, pk=None):
+        '''
+        {
+            "event": {
+                "event_timestamp_ms": 1725261381414,
+                "product_id": "sub_remove_ads",
+                "period_type": "NORMAL",
+                "purchased_at_ms": 1725261429000,
+                "expiration_at_ms": 1725261729000,
+                "environment": "SANDBOX",
+                "entitlement_id": null,
+                "entitlement_ids": null,
+                "presented_offering_id": null,
+                "transaction_id": "2000000702160197",
+                "original_transaction_id": "2000000702015149",
+                "is_family_share": false,
+                "country_code": "US",
+                "app_user_id": "$RCAnonymousID:e72cb327474b42b9b89eec8c6acd0445",
+                "aliases": [
+                    "$RCAnonymousID:e72cb327474b42b9b89eec8c6acd0445"
+                ],
+                "original_app_user_id": "$RCAnonymousID:e72cb327474b42b9b89eec8c6acd0445",
+                "currency": "USD",
+                "is_trial_conversion": false,
+                "price": 9.99,
+                "price_in_purchased_currency": 9.99,
+                "subscriber_attributes": {
+                    "$attConsentStatus": {
+                        "value": "notDetermined",
+                        "updated_at_ms": 1725254012074
+                    }
+                },
+                "store": "APP_STORE",
+                "takehome_percentage": 0.7,
+                "offer_code": null,
+                "tax_percentage": 0,
+                "commission_percentage": 0.3,
+                "renewal_number": 23,
+                "type": "RENEWAL",
+                "id": "7ED8B8C1-0BC8-4FD2-9839-742D51D521FA",
+                "app_id": "app1ec3c53c4d"
+            },
+            "api_version": "1.0"
+        }
 
-        print(f"Revenue cat request: ", request.body)
-        print(f"Revenue cat request: ", request.data)
-        return JsonResponse({"data": "test"})
+
+
+
+        '''
+
+        ''' CANELLATION - UNSUB
+        {
+        "event": {
+            "event_timestamp_ms": 1725261691435,
+            "product_id": "sub_remove_ads",
+            "period_type": "NORMAL",
+            "purchased_at_ms": 1725261729000,
+            "expiration_at_ms": 1725262029000,
+            "environment": "SANDBOX",
+            "entitlement_id": null,
+            "entitlement_ids": null,
+            "presented_offering_id": null,
+            "transaction_id": "2000000702164742",
+            "original_transaction_id": "2000000702015149",
+            "is_family_share": false,
+            "country_code": "US",
+            "app_user_id": "$RCAnonymousID:e72cb327474b42b9b89eec8c6acd0445",
+            "aliases": [
+            "$RCAnonymousID:e72cb327474b42b9b89eec8c6acd0445"
+            ],
+            "original_app_user_id": "$RCAnonymousID:e72cb327474b42b9b89eec8c6acd0445",
+            "cancel_reason": "UNSUBSCRIBE", // Type expiration: expiration_reason "UNKNOWN"
+            "currency": "USD",
+            "price": 0,
+            "price_in_purchased_currency": 0,
+            "subscriber_attributes": {
+            "$attConsentStatus": {
+                "value": "notDetermined",
+                "updated_at_ms": 1725254012074
+            }
+            },
+            "store": "APP_STORE",
+            "takehome_percentage": 0.7,
+            "offer_code": null,
+            "tax_percentage": 0,
+            "commission_percentage": 0.3,
+            "renewal_number": 24,
+            "type": "CANCELLATION",
+            "id": "E190EAD5-8760-4060-84CE-5F422E71344F",
+            "app_id": "app1ec3c53c4d"
+        },
+        "api_version": "1.0"
+        }
+
+        '''
+
+
+                # I am not supporting refunds or cancellation
+        # If a user cancels a sub, they will remain subbed until exp-date
+        # IF a user cancels and resubs within their sub period, only the latest sub exp_date will be applied, the sub period will not start at the end of the current sub period
+
+        event = request.data
+        event_type = event.get("type") # RENEWAL, EXPIRATION, CANCELLATION
+        app_user_id = event.get("app_user_id")
+        exp_date = event.get("expiration_at_ms") # Set sub_end_date with this
+        user_id = event.get("subscriber_attributes").get("userID").get("value")
+        if event_type == "RENEWAL":
+            # Subscription update, new or recurring
+            user = get_user_by_revenuecat_id(app_user_id, user_id)
+            if user:
+                # we already have this user lets update them
+                print(f"User subbed: {app_user_id=}, {user_id=}, {exp_date=}, ")
+                user.sub_end_date = datetime.fromtimestamp(exp_date)
+                user.save()
+            else:
+                msg = f"Error getting user to update sub: {app_user_id=}, {user_id=}, {exp_date=}, "
+                logger.debug(msg)
+                print(msg)
 
     @action(detail=False, methods=['POST'], permission_classes=[])
     def webhook(self, request, pk=None):

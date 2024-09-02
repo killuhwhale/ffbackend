@@ -177,6 +177,12 @@ class HookViewSet(viewsets.ViewSet):
         try:
             event = request.data
 
+            if event is None:
+                resp = JsonResponse({})
+                resp.status_code = 500
+                print(f"Could not get data from request: ", request.data)
+                return resp
+
             event_type = event.get("type") # RENEWAL, EXPIRATION, CANCELLATION
             app_user_id = event.get("app_user_id")
 

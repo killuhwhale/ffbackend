@@ -32,12 +32,23 @@ def get_user_by_customer_id(stripe_obj) -> Union[UserType, None]:
         logger.critical(f"Failed to find user w/ {customer_id=}.", e)
     return None
 
-def get_user_by_revenuecat_id(rc_id) -> Union[UserType, None]:
+def get_user_by_revenuecat_id(rc_id, user_id) -> Union[UserType, None]:
+    user = None
     try:
-        return User.objects.get(revenuecat_id=rc_id)
+        user = User.objects.get(revenuecat_id=rc_id)
     except Exception as e:
         logger.critical(f"Failed to find user w/ revenuecat {rc_id=}.", e)
-    return None
+
+    if user is None:
+        try:
+            # Get by user id, update revenuecat_id
+            user = User.objects.get(id=user_id)
+            user.revenuecat_id = rc_id
+            user.save()
+        except Exception as err:
+            print(f"Error getting user via user_id or setting rc_id: ", err)
+
+    return user
 
 def get_future_datetime(dt: datetime) -> datetime:
     '''Compares the given dt to the current datetime and returns the datetime that is furthest in the future.'''

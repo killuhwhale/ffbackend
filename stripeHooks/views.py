@@ -183,19 +183,13 @@ class HookViewSet(viewsets.ViewSet):
                 print(f"Could not get data from request: ", request.data)
                 return resp
 
-            print(f"Event: {event=}")
-
-            event_type = event.get("type") # RENEWAL, EXPIRATION, CANCELLATION
-            print(f"event_type: {event_type=}" )
-
+            event_type = event.get("type") # RENEWAL, EXPIRATION, CANCELLATIO
             app_user_id = event.get("app_user_id")
-            print(f"app_user_id: {app_user_id=}" )
-
             user_id = event.get("subscriber_attributes").get("userID").get("value")
-            print(f"user_id: {user_id=}" )
 
             print(f"User requested subbed: {app_user_id=}, {user_id=}")
             logger.debug(f"User requested subbed: {app_user_id=}, {user_id=}")
+
             if event_type == "RENEWAL":
                 exp_date = event.get("expiration_at_ms") # Set sub_end_date with this
                 # Subscription update, new or recurring
@@ -203,7 +197,7 @@ class HookViewSet(viewsets.ViewSet):
                 if user:
                     # we already have this user lets update them
                     print(f"User subbed: {app_user_id=}, {user_id=}, {exp_date=}, ")
-                    user.sub_end_date = datetime.fromtimestamp(exp_date)
+                    user.sub_end_date = datetime.fromtimestamp(exp_date//1000)
                     user.save()
                 else:
                     msg = f"Error getting user to update sub: {app_user_id=}, {user_id=}, {exp_date=}, "

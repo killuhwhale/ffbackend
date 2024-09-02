@@ -10,7 +10,6 @@ from rest_framework.decorators import action
 from typing import Union
 
 from instafitAPI.settings import env
-from utils import get_env
 from users.models import User as UserType
 
 logger = logging.getLogger(__name__)
@@ -38,6 +37,7 @@ def get_user_by_revenuecat_id(rc_id, user_id) -> Union[UserType, None]:
         user = User.objects.get(revenuecat_id=rc_id)
     except Exception as e:
         logger.critical(f"Failed to find user w/ revenuecat {rc_id=}.", e)
+        print(f"Failed to find user w/ revenuecat {rc_id=}.", e)
 
     if user is None:
         try:
@@ -47,6 +47,7 @@ def get_user_by_revenuecat_id(rc_id, user_id) -> Union[UserType, None]:
             user.save()
         except Exception as err:
             print(f"Error getting user via user_id or setting rc_id: ", err)
+            logger.debug(f"Error getting user via user_id or setting rc_id: ", err)
 
     return user
 

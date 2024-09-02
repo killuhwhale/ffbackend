@@ -64,6 +64,7 @@ class JWTMiddleware:
                 # return JsonResponse({'error': f'Invalid access token, route not permitted '}, status=401)
             elif request.path == "/hooks/revenuecat/":
                 if request.META.get('HTTP_AUTHORIZATION') == env("REVENUECAT_TOKEN"):
+                    print("Reveneue cat access granted..")
                     response = self.get_response(request)
                     return response
                 else:

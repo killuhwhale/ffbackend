@@ -44,11 +44,11 @@ class JWTMiddleware:
                 logger.debug(f"Needs access token  for this users request, only post is bypassed... {request.method=}",)
                 # return JsonResponse({'error': f'Invalid access token, route not permitted '}, status=401)
             elif request.path == "/hooks/revenuecat/":
-                    logger.debug(f"{env('REVENUECAT_TOKEN')=}")
-                    return response
-                    # if request.META.get('HTTP_AUTHORIZATION') == env("REVENUECAT_TOKEN"):
-                    # else:
-                    #     return JsonResponse({'error': 'Invalid access token'}, status=401)
+                logger.debug(f"{env('REVENUECAT_TOKEN')=}")
+                return response
+                # if request.META.get('HTTP_AUTHORIZATION') == env("REVENUECAT_TOKEN"):
+                # else:
+                #     return JsonResponse({'error': 'Invalid access token'}, status=401)
             else:
                 logger.debug("No access token needed... ")
                 response = self.get_response(request)

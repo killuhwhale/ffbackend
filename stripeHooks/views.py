@@ -187,7 +187,7 @@ class HookViewSet(viewsets.ViewSet):
             app_user_id = event.get("app_user_id")
             user_id = event.get("subscriber_attributes").get("userID").get("value")
 
-            print(f"User requested subbed: {app_user_id=}, {user_id=}")
+            print(f"User requested subbed: {event_type=} {app_user_id=}, {user_id=}")
             logger.debug(f"User requested subbed: {app_user_id=}, {user_id=}")
 
             if event_type == "RENEWAL":

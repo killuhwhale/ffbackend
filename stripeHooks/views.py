@@ -54,6 +54,13 @@ class HookViewSet(viewsets.ViewSet):
     '''
 
     @action(detail=False, methods=['POST'], permission_classes=[])
+    def revenuecat(self, request, pk=None):
+
+        logger.debug(f"Revenue cat request: ", request.body)
+        logger.debug(f"Revenue cat request: ", request.data)
+        return JsonResponse({"data": "test"})
+
+    @action(detail=False, methods=['POST'], permission_classes=[])
     def webhook(self, request, pk=None):
         print(f"webhook called...")
         try:

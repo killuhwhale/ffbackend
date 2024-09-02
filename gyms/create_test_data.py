@@ -1,6 +1,13 @@
 from datetime import datetime, timedelta
 from gyms.models import Gyms, GymClasses, WorkoutGroups, Workouts, WorkoutItems, WorkoutNames, WorkoutCategories, CompletedWorkoutGroups
 from django.contrib.auth import get_user_model
+User =  get_user_model()
+User.objects.get(email="andayac@gmail.com").delete()
+from users.models import ConfirmationEmailCodes
+ConfirmationEmailCodes.objects.get(email="andayac@gmail.com").delete()
+
+exit()
+
 import pytz
 tz = pytz.timezone("US/Pacific")
 

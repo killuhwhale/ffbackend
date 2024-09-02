@@ -176,14 +176,16 @@ class HookViewSet(viewsets.ViewSet):
         # IF a user cancels and resubs within their sub period, only the latest sub exp_date will be applied, the sub period will not start at the end of the current sub period
         try:
             event = request.data
+
             event_type = event.get("type") # RENEWAL, EXPIRATION, CANCELLATION
             app_user_id = event.get("app_user_id")
-            exp_date = event.get("expiration_at_ms") # Set sub_end_date with this
+
             user_id = event.get("subscriber_attributes").get("userID").get("value")
 
-            print(f"User requested subbed: {app_user_id=}, {user_id=}, {exp_date=}, ")
-            logger.debug(f"User requested subbed: {app_user_id=}, {user_id=}, {exp_date=}, ")
+            print(f"User requested subbed: {app_user_id=}, {user_id=}")
+            logger.debug(f"User requested subbed: {app_user_id=}, {user_id=}")
             if event_type == "RENEWAL":
+                exp_date = event.get("expiration_at_ms") # Set sub_end_date with this
                 # Subscription update, new or recurring
                 user = get_user_by_revenuecat_id(app_user_id, user_id)
                 if user:

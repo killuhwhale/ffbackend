@@ -46,7 +46,9 @@ class JWTMiddleware:
             elif request.path == "/hooks/revenuecat/":
                 logger.debug(f"{env('REVENUECAT_TOKEN')=}")
                 logger.debug(f"{cenv('REVENUECAT_TOKEN')=}")
+
                 print(f"{env('REVENUECAT_TOKEN')=}")
+                print(f"{cenv('REVENUECAT_TOKEN')=}")
                 print(f"{request.META.get('HTTP_AUTHORIZATION')=}")
 
                 return response

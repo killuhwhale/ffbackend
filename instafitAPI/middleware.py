@@ -39,7 +39,7 @@ class JWTMiddleware:
         if request.path == "/":
             return JsonResponse({'data': f'Hello world {request.path}'}, status=200)
 
-        if request.path in ['/hooks/webhook/', '/login/', '/register/', '/token/', '/token/refresh/', '/users/', '/user/send_reset_code/', '/user/reset_password/', '/emailvalidation/confirm_email/', '/emailvalidation/send_confirmation_email']:
+        if request.path in ['/hooks/revenuecat/', '/hooks/webhook/', '/login/', '/register/', '/token/', '/token/refresh/', '/users/', '/user/send_reset_code/', '/user/reset_password/', '/emailvalidation/confirm_email/', '/emailvalidation/send_confirmation_email']:
             if request.path == "/users/" and not request.method == "POST":
                 logger.debug(f"Needs access token  for this users request, only post is bypassed... {request.method=}",)
                 # return JsonResponse({'error': f'Invalid access token, route not permitted '}, status=401)

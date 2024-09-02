@@ -7,10 +7,29 @@ from jwt import decode, ExpiredSignatureError
 from pytz import timezone
 import logging
 
+import environ
+env = environ.Env(
+    # set casting, default value
+    DEBUG=(bool, False),
+    SPACES_ENDPOINT_FULL=(str, ""),
+    SPACES_ENDPOINT_EDGE=(str, ""),
+    SPACES_KEY=(str, ""),
+    SPACES_SECRET=(str, ""),
+    BUCKET=(str, ""),
+    SENDGRID_API_KEY=(str, ""),
+    SENDGRIPD_FROM_EMAIL=(str, ""),
+    SECRET_KEY=(str, ""),
+    DEV_DB_NAME=(str, ""),
+    DEV_DB_USER=(str, ""),
+    DEV_DB_PASS=(str, ""),
+    DJANGO_ALLOWED_HOSTS=(str, "127.0.0.1,localhost"),
+    RUN_ENV=(str, "dev"),
+    REVENUECAT_TOKEN=(str, ""),
+)
+environ.Env.read_env()
+
 User =  get_user_model()
 logger = logging.getLogger(__name__)
-
-from instafitAPI.settings import env, cenv
 
 
 def get_user_timezone(request):
@@ -45,10 +64,9 @@ class JWTMiddleware:
                 # return JsonResponse({'error': f'Invalid access token, route not permitted '}, status=401)
             elif request.path == "/hooks/revenuecat/":
                 logger.debug(f"{env('REVENUECAT_TOKEN')=}")
-                logger.debug(f"{cenv('REVENUECAT_TOKEN')=}")
+
 
                 print(f"{env('REVENUECAT_TOKEN')=}")
-                print(f"{cenv('REVENUECAT_TOKEN')=}")
                 print(f"{request.META.get('HTTP_AUTHORIZATION')=}")
 
                 return response

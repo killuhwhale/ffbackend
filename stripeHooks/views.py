@@ -179,6 +179,8 @@ class HookViewSet(viewsets.ViewSet):
         app_user_id = event.get("app_user_id")
         exp_date = event.get("expiration_at_ms") # Set sub_end_date with this
         user_id = event.get("subscriber_attributes").get("userID").get("value")
+        print(f"User requested subbed: {app_user_id=}, {user_id=}, {exp_date=}, ")
+        logger.debug(f"User requested subbed: {app_user_id=}, {user_id=}, {exp_date=}, ")
         if event_type == "RENEWAL":
             # Subscription update, new or recurring
             user = get_user_by_revenuecat_id(app_user_id, user_id)
@@ -191,6 +193,7 @@ class HookViewSet(viewsets.ViewSet):
                 msg = f"Error getting user to update sub: {app_user_id=}, {user_id=}, {exp_date=}, "
                 logger.debug(msg)
                 print(msg)
+        return JsonResponse({"success": True})
 
     @action(detail=False, methods=['POST'], permission_classes=[])
     def webhook(self, request, pk=None):

@@ -174,26 +174,30 @@ class HookViewSet(viewsets.ViewSet):
                 # I am not supporting refunds or cancellation
         # If a user cancels a sub, they will remain subbed until exp-date
         # IF a user cancels and resubs within their sub period, only the latest sub exp_date will be applied, the sub period will not start at the end of the current sub period
+        try:
+            event = request.data
+            event_type = event.get("type") # RENEWAL, EXPIRATION, CANCELLATION
+            app_user_id = event.get("app_user_id")
+            exp_date = event.get("expiration_at_ms") # Set sub_end_date with this
+            user_id = event.get("subscriber_attributes").get("userID").get("value")
 
-        event = request.data
-        event_type = event.get("type") # RENEWAL, EXPIRATION, CANCELLATION
-        app_user_id = event.get("app_user_id")
-        exp_date = event.get("expiration_at_ms") # Set sub_end_date with this
-        user_id = event.get("subscriber_attributes").get("userID").get("value")
-        print(f"User requested subbed: {app_user_id=}, {user_id=}, {exp_date=}, ")
-        logger.debug(f"User requested subbed: {app_user_id=}, {user_id=}, {exp_date=}, ")
-        if event_type == "RENEWAL":
-            # Subscription update, new or recurring
-            user = get_user_by_revenuecat_id(app_user_id, user_id)
-            if user:
-                # we already have this user lets update them
-                print(f"User subbed: {app_user_id=}, {user_id=}, {exp_date=}, ")
-                user.sub_end_date = datetime.fromtimestamp(exp_date)
-                user.save()
-            else:
-                msg = f"Error getting user to update sub: {app_user_id=}, {user_id=}, {exp_date=}, "
-                logger.debug(msg)
-                print(msg)
+            print(f"User requested subbed: {app_user_id=}, {user_id=}, {exp_date=}, ")
+            logger.debug(f"User requested subbed: {app_user_id=}, {user_id=}, {exp_date=}, ")
+            if event_type == "RENEWAL":
+                # Subscription update, new or recurring
+                user = get_user_by_revenuecat_id(app_user_id, user_id)
+                if user:
+                    # we already have this user lets update them
+                    print(f"User subbed: {app_user_id=}, {user_id=}, {exp_date=}, ")
+                    user.sub_end_date = datetime.fromtimestamp(exp_date)
+                    user.save()
+                else:
+                    msg = f"Error getting user to update sub: {app_user_id=}, {user_id=}, {exp_date=}, "
+                    logger.debug(msg)
+                    print(msg)
+        except Exception as err:
+            print(f"Error RevenueCat web hook: {err=}")
+
         return JsonResponse({"success": True})
 
     @action(detail=False, methods=['POST'], permission_classes=[])

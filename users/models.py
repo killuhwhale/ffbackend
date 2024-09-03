@@ -100,8 +100,11 @@ class UserManager(BaseUserManager):
             logger.debug(f"Setting password: {password=}")
             user.customer_id = customer_id
             user.set_password(password)
+            # TODO() Remove
+            user.is_active = True
             user.save()
-            self.send_confirmation_email(email)
+            # TODO() Remove
+            #self.send_confirmation_email(email)
             return user
         except Exception as err:
             logger.error(f"Error creating user: ", err)

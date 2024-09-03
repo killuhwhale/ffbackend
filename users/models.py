@@ -96,15 +96,12 @@ class UserManager(BaseUserManager):
 
             user: User = self.model(email=email, secret=pyotp.random_base32(), **extra_fields)
             customer_id = self._create_stripe_customer(email)
-            logger.debug(f"Setting customer_id: {customer_id=}")
-            logger.debug(f"Setting password: {password=}")
+            # logger.debug(f"Setting customer_id: {customer_id=}")
+            # logger.debug(f"Setting password: {password=}")
             user.customer_id = customer_id
             user.set_password(password)
-            # TODO() Remove
-            user.is_active = True
             user.save()
-            # TODO() Remove
-            #self.send_confirmation_email(email)
+            self.send_confirmation_email(email)
             return user
         except Exception as err:
             logger.error(f"Error creating user: ", err)

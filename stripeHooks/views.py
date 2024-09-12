@@ -31,23 +31,14 @@ def get_user_by_customer_id(stripe_obj) -> Union[UserType, None]:
         logger.critical(f"Failed to find user w/ {customer_id=}.", e)
     return None
 
-def get_user_by_revenuecat_id(rc_id, user_id) -> Union[UserType, None]:
+def get_user(user_id) -> Union[UserType, None]:
     user = None
     try:
-        user = User.objects.get(revenuecat_id=rc_id)
-    except Exception as e:
-        logger.critical(f"Failed to find user w/ revenuecat {rc_id=}.", e)
-        print(f"Failed to find user w/ revenuecat {rc_id=}.", e)
-
-    if user is None:
-        try:
-            # Get by user id, update revenuecat_id
-            user = User.objects.get(id=user_id)
-            user.revenuecat_id = rc_id
-            user.save()
-        except Exception as err:
-            print(f"Error getting user via user_id or setting rc_id: ", err)
-            logger.debug(f"Error getting user via user_id or setting rc_id: ", err)
+        # Get by user id, update revenuecat_id
+        user = User.objects.get(id=user_id)
+    except Exception as err:
+        print(f"Error getting user via user_id : ", err)
+        logger.debug(f"Error getting user via user_id: ", err)
 
     return user
 
@@ -188,16 +179,16 @@ class HookViewSet(viewsets.ViewSet):
             app_user_id = event.get("app_user_id")
             user_id = event.get("subscriber_attributes").get("userID").get("value")
 
-            print(f"User requested subbed: {event_type=} {app_user_id=}, {user_id=}")
-            logger.debug(f"User requested subbed: {app_user_id=}, {user_id=}")
+            print(f"User requested subbed: {event_type=}, {user_id=}")
+            logger.debug(f"User requested subbed: {user_id=}")
 
             if event_type == "RENEWAL":
                 exp_date = event.get("expiration_at_ms") # Set sub_end_date with this
                 # Subscription update, new or recurring
-                user = get_user_by_revenuecat_id(app_user_id, user_id)
+                user = get_user(user_id)
                 if user:
                     # we already have this user lets update them
-                    print(f"User subbed: {app_user_id=}, {user_id=}, {exp_date=}, ")
+                    print(f"User subbed: {user_id=}, {exp_date=}, ")
                     user.sub_end_date = datetime.fromtimestamp(exp_date//1000)
                     user.save()
                 else:

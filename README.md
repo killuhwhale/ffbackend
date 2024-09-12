@@ -1,13 +1,12 @@
 # Google Drive Link
-
 https://docs.google.com/document/d/1QtKaH68WTCxmLotRMc2nixt8vxDa7ziKiVWk8xLwTz4/edit?usp=sharing
 
 
 # Google Ads
 https://apps.admob.com/v2/apps/4687147405/settings?pli=1
 
-# QuickStart
 
+# QuickStart
 ``` Backend
 cd ~/ws_p38/fitform/ffbackend && docker compose -f docker-compose_prod.yml up
 ```

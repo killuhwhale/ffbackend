@@ -3,6 +3,8 @@
 https://docs.google.com/document/d/1QtKaH68WTCxmLotRMc2nixt8vxDa7ziKiVWk8xLwTz4/edit?usp=sharing
 
 
+# Google Ads
+https://apps.admob.com/v2/apps/4687147405/settings?pli=1
 
 # QuickStart
 
@@ -11,7 +13,7 @@ cd ~/ws_p38/fitform/ffbackend && docker compose -f docker-compose_prod.yml up
 ```
 
 ``` Emu - FrontEnd App
-emulator -noaudio -avd Pixel_4_API_30 &
+emulator -noaudio -avd Pixel_4_API_30_2 &
 cd ~/ws_p38/fitform/RepTracker && adb -s emulator-5554 reverse tcp:8000 tcp:8000 &&  adb -s emulator-5554 reverse tcp:8081 tcp:8081 && npx expo run:android
 ```
 
@@ -52,20 +54,17 @@ stripe listen --forward-to localhost:8000/hooks/webhook/
     - Good for classes to post a workout and a user to "Complete" it basically use as a template and track the original so the user can manually compare
 
 
-
+a1234567890qwe[portpoiyuuuioppoiopi;lkas;dlkasdlkjldfkjsdfhjgjh,mncz,xmncm,znxbvbvbvbcncnxmxz,z,,blsd;laksd;lakdpqwofjkiowjgbohdjkfbsdjiofjsd
 
 # TODO()
 - Add media for workoutnames...
-- Update live db with new limits, so reset the database and restart...
-- Update both sites on Prod
-
 
 I thinkwe are good
 we have limits on get queries
 we have abuse limits
+
 we have differing limits based on user is member or not
 we have permission.
-
 
 
 

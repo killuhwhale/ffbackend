@@ -176,6 +176,7 @@ class HookViewSet(viewsets.ViewSet):
         # IF a user cancels and resubs within their sub period, only the latest sub exp_date will be applied, the sub period will not start at the end of the current sub period
         try:
             event = request.data.get("event")
+            print(f"Raw event: {event=}")
 
             if event is None:
                 resp = JsonResponse({})

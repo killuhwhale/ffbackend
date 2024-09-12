@@ -278,7 +278,7 @@ class ResetPasswordEmailViewSet(viewsets.ViewSet):
         has_existing_code = self._check_expired_entry(email)
         if has_existing_code:
             print("User has code already")
-            return Response({'error': 'You already have an existing code. Please enter the code or wait 15 mins.'})
+            return Response({'error': 'You already have an existing code. Please enter the code on the Submit Code page or wait 15 mins.'})
 
         return Response(self._send_email(user))
 

@@ -182,7 +182,7 @@ class HookViewSet(viewsets.ViewSet):
             print(f"User requested subbed: {event_type=}, {user_id=}")
             logger.debug(f"User requested subbed: {user_id=}")
 
-            if event_type == "RENEWAL":
+            if event_type == "RENEWAL" or event_type == "INITIAL_PURCHASE":
                 exp_date = event.get("expiration_at_ms") # Set sub_end_date with this
                 # Subscription update, new or recurring
                 user = get_user(user_id)

@@ -2059,33 +2059,34 @@ class StatsViewSet(viewsets.ViewSet):
 def delete_user_data(user_id, user_email):
     try:
         # 1. Delete records in GymClassFavorites
-        GymClassFavorites.objects.filter(user_id=user_id).delete()
+        # GymClassFavorites.objects.filter(user_id=user_id).delete()
 
         # 2. Delete records in GymFavorites
-        GymFavorites.objects.filter(user_id=user_id).delete()
+        # GymFavorites.objects.filter(user_id=user_id).delete()
 
         # 3. Delete records in WorkoutGroups
         # Fetch all WorkoutGroups for the above GymClasses ids and user's personal workoutgroups.
-        gym_class_ids = [str(r) for r in GymClasses.objects.filter(gym__owner_id=user_id).values_list('id', flat=True)]
-        print("GymClass ids: ", type(gym_class_ids[0]), gym_class_ids)
+        # gym_class_ids = [str(r) for r in GymClasses.objects.filter(gym__owner_id=user_id).values_list('id', flat=True)]
+        # print("GymClass ids: ", type(gym_class_ids[0]), gym_class_ids)
 
-        combined_filter = Q(owner_id=user_id, owned_by_class=False) | Q(owner_id__in=gym_class_ids, owned_by_class=True)
+        # combined_filter = Q(owner_id=user_id, owned_by_class=False) | Q(owner_id__in=gym_class_ids, owned_by_class=True)
+        combined_filter = Q(owner_id=user_id, owned_by_class=False)
         WorkoutGroups.objects.filter(combined_filter).delete()
 
         # 4. Delete records in CompletedWorkoutGroups
-        CompletedWorkoutGroups.objects.filter(user_id=user_id).delete()
+        # CompletedWorkoutGroups.objects.filter(user_id=user_id).delete()
 
         # 5. Delete records in ClassMembers
-        ClassMembers.objects.filter(user_id=user_id).delete()
+        # ClassMembers.objects.filter(user_id=user_id).delete()
 
         # 6. Delete records in Coaches
-        Coaches.objects.filter(user_id=user_id).delete()
+        # Coaches.objects.filter(user_id=user_id).delete()
 
         # 7. Delete GymClasses where related Gyms have the owner_id matching the user_id
-        GymClasses.objects.filter(gym__owner_id=user_id).delete()
+        # GymClasses.objects.filter(gym__owner_id=user_id).delete()
 
         # 8. Delete Gyms owned by the user
-        Gyms.objects.filter(owner_id=user_id).delete()
+        # Gyms.objects.filter(owner_id=user_id).delete()
 
         # 8. Delete reset password codes stored
         ResetPasswords.objects.filter(email=user_email).delete()

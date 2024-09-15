@@ -282,11 +282,12 @@ class WorkoutPermission(BasePermission):
 
     def has_permission(self, request, view):
         # Need to check group id to see if the user has permission to do stuff.
-        if view.action == "update" or view.action == "partial_update" or request.method == "PATCH":
+        print(f"{request.method=} - {view.action=}")
+        if view.action == "partial_update" or request.method == "PATCH":
             return False
         elif request.method in SAFE_METHODS:
             return True
-        elif request.method == "POST" and view.action == "create":
+        elif request.method == "POST" and view.action == "create" or request.method == "PUT":
             group_id = request.data.get("group", 0)
             if not group_id:
                 return Response(to_err("Error finding group id"))
@@ -370,7 +371,7 @@ class WorkoutGroupsPermission(BasePermission):
         elif request.method in SAFE_METHODS:
             # Check permissions for read-only request
             return True
-        elif request.method == "POST" and view.action == "create":
+        elif request.method == "POST" and (view.action == "create" or view.action == "duplicate"):
             '''
                 A user can create workouts if they are members.
                 If a user is not a member:
@@ -435,7 +436,7 @@ class WorkoutItemsPermission(BasePermission):
     def has_permission(self, request, view):
         # Workout Items are create in bulk and are not modified nor deleted directly.
         print("WorkoutITems 403 checkkkkzzzz", request.method, type(view.action))
-        if view.action == "create" or view.action == "update" or view.action == "partial_update" or view.action == "destroy":
+        if view.action == "create"  or view.action == "partial_update" or view.action == "destroy":
             return False
         elif request.method in SAFE_METHODS:
             # Check permissions for read-only request
@@ -443,7 +444,7 @@ class WorkoutItemsPermission(BasePermission):
 
 
 
-        elif request.method == "POST" and view.action == "items":
+        elif request.method == "POST" and (view.action == "items" or  view.action == "update_items"):
             workout_id = request.data.get("workout", "0")
             print("Perm check workoutItems", workout_id)
             if not workout_id == "0":
@@ -480,10 +481,10 @@ class WorkoutDualItemsPermission(BasePermission):
         elif request.method in SAFE_METHODS:
             # Check permissions for read-only request
             return True
-        elif request.method == "POST" and view.action == "record_items":
-            return True
+        # elif request.method == "POST" and view.action == "record_items":
+        #     return True
 
-        elif request.method == "POST" and view.action == "items":
+        elif request.method == "POST" and (view.action == "items" or view.action == "update_items" or view.action == "record_items"):
             workout_id = request.data.get("workout", "0")
             print("Perm check workoutItems", workout_id)
             if not workout_id == "0":
@@ -955,15 +956,10 @@ class WorkoutGroupsViewSet(viewsets.ModelViewSet, WorkoutGroupsPermission):
     serializer_class = WorkoutGroupsSerializer
     permission_classes = [WorkoutGroupsPermission]
 
-    def create(self, request):
+    def create_group(self, data, request):
         try:
-            data = {**request.data.dict()}
-            files = request.data.getlist("files", [])
-            if 'files' in data:
-                del data['files']
 
             # Models expects True/ False, coming from json, we get true/ false. Instead we store 0,1 and convert
-            data['owned_by_class'] = jbool(data['owned_by_class'])
             if not data['owned_by_class']:
                 data['owner_id'] = request.user.id
 
@@ -992,6 +988,81 @@ class WorkoutGroupsViewSet(viewsets.ModelViewSet, WorkoutGroupsPermission):
         #     workout_group.delete()
         #     print("Error Uploading media for workoutgroup ", e)
         #     return Response(to_err("Failed to create workout"))
+
+    def create(self, request):
+        data = {**request.data.dict()}
+        data['owned_by_class'] = jbool(data['owned_by_class'])
+        if 'files' in data:
+            del data['files']
+        files = request.data.getlist("files", [])
+
+        return self.create_group(data, request)
+
+    @action(detail=False, methods=['post'], permission_classes=[WorkoutGroupsPermission])
+    def duplicate(self, request, *args, **kwargs):
+        data = {**request.data.dict()}
+        data['owned_by_class'] = jbool(data['owned_by_class'])
+        title = data['title']
+        for_date = data['for_date']
+        caption = data['caption']
+        owned_by_class = data['owned_by_class']
+        owner_id = data['owner_id']
+        workouts = json.loads(data['workouts'])
+
+        group_data = {
+            "title": title,
+            "for_date": for_date,
+            "caption": caption,
+            "owned_by_class": owned_by_class,
+            "owner_id": owner_id,
+            "finished": False,
+            "media_ids": [],
+            "archived": False,
+        }
+
+        if not group_data['owned_by_class']:
+            group_data['owner_id'] = request.user.id
+
+        with transaction.atomic():
+            workout_group, newly_created = WorkoutGroups.objects.get_or_create(**{**group_data, 'media_ids': []})
+
+            for workout_json in workouts:
+                items = workout_json['workout_items']
+                del workout_json['workout_items']
+                del workout_json['id']
+
+                workout_data = {**workout_json, 'group_id': workout_group.id}
+                del workout_data['group']
+
+                workout, new_or_nah = Workouts.objects.get_or_create(**workout_data)
+                print(f'Got Workout ({new_or_nah=}):', f"{workout.scheme_type=}")
+
+                new_items = []
+                for item_json in items:
+                    del item_json['id']
+                    del item_json['date']
+
+                    if  workout.scheme_type <= 2:
+                        new_items.append(WorkoutItems(
+                            **{**item_json, "workout": Workouts(id=workout.id), "name": WorkoutNames(id=item_json['name']['id'])}))
+                    else:
+                        # Create Dual Items
+                         new_items.append(WorkoutDualItems(
+                            **{**item_json, "workout": Workouts(id=workout.id), "name": WorkoutNames(id=item_json['name']['id'])}))
+
+                if  workout.scheme_type <= 2:
+                    WorkoutItems.objects.bulk_create(new_items)
+                else:
+                    WorkoutDualItems.objects.bulk_create(new_items)
+
+
+
+        return Response(to_data("Testing duplicate..."))
+        # workouts = json.loads(data['workouts'])
+        # for workout in workouts:
+
+        # Create Workouts with items
+
 
     def last_id_from_media(self, cur_media_ids: List[str]) -> int:
         last_id = 0
@@ -1191,6 +1262,30 @@ class WorkoutsViewSet(viewsets.ModelViewSet, DestroyWithPayloadMixin, WorkoutPer
         return Response(WorkoutCreateSerializer(workout).data)
 
 
+    def update(self, request, *args, **kwargs):
+        print(f"PUT Update: {args=} {kwargs=}")
+        try:
+            # Partially update or fully update depending on whether it is a PUT or PATCH request
+            partial = kwargs.pop('partial', False)
+            workout = self.get_object()
+
+            # Pass the request data to the serializer
+            serializer = self.get_serializer(workout, data=request.data, partial=partial)
+
+            print(f"update: {request.data=}")
+
+            # Check if the data is valid
+            if serializer.is_valid():
+                # Save the updated instance
+                serializer.save()
+                return Response(serializer.data)
+            else:
+                # Return a response with an error if the data is invalid
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as err:
+            print(f"Update Workout error: {err=}")
+        return Response({'detail': "Update Workout error"})
+
     # Only need this if we inlcude CompletedWorkouts
     # def retrieve(self, request, *args, **kwargs):
     #     # workout_id = request.data.get('id')
@@ -1282,7 +1377,19 @@ class WorkoutItemsViewSet(viewsets.ModelViewSet,  WorkoutItemsPermission ):
         return Response(to_err("Failed, route not available.", Exception()), status=404)
 
     @ action(detail=False, methods=['post'], permission_classes=[WorkoutItemsPermission])
-    def items(self, request, pk=None):
+    def update_items(self, request, pk=None):
+        try:
+            workout_id = request.data.get("workout", 0)
+            with transaction.atomic():
+                WorkoutItems.objects.filter(workout__id=workout_id).delete()
+                return self.create_items(request)
+
+        except Exception as e:
+            print("Error update_items: ", e)
+            return Response(to_err("Failed to update items"))
+
+
+    def create_items(self, request):
         try:
             print("Creating workout items: ", request.data)
             workout_items = json.loads(request.data.get("items", '[]'))
@@ -1308,6 +1415,13 @@ class WorkoutItemsViewSet(viewsets.ModelViewSet,  WorkoutItemsPermission ):
             print(e)
             return Response(to_err("Failed to insert"))
 
+
+
+    @ action(detail=False, methods=['post'], permission_classes=[WorkoutItemsPermission])
+    def items(self, request, pk=None):
+       self.create_items(request)
+
+
     def get_serializer_class(self):
         if self.action == 'list' or self.action == 'retrieve':
             return WorkoutItemSerializer
@@ -1328,8 +1442,8 @@ class WorkoutDualItemsViewSet(viewsets.ModelViewSet,  WorkoutItemsPermission ):
         # return super().create(request, *args, **kwargs)
         return Response(to_err("Failed, route not available.", Exception()), status=404)
 
-    @ action(detail=False, methods=['post'], permission_classes=[WorkoutDualItemsPermission])
-    def items(self, request, pk=None):
+
+    def createDualItems(self, request):
         try:
             print("Creating workout Dual Items: ", request.data)
             workout_items = json.loads(request.data.get("items", '[]'))
@@ -1355,6 +1469,24 @@ class WorkoutDualItemsViewSet(viewsets.ModelViewSet,  WorkoutItemsPermission ):
             print(e)
             return Response(to_err("Failed to insert"))
 
+
+    @action(detail=False, methods=['post'], permission_classes=[WorkoutDualItemsPermission])
+    def update_items(self, request, pk=None):
+        try:
+
+            workout_id = request.data.get("workout", 0)
+            with transaction.atomic():
+                WorkoutDualItems.objects.filter(workout__id=workout_id).delete()
+                return self.createDualItems(request)
+
+        except Exception as err:
+            return Response(to_err("Failed to update dual items"), err)
+
+
+
+    @action(detail=False, methods=['post'], permission_classes=[WorkoutDualItemsPermission])
+    def items(self, request, pk=None):
+        return self.createDualItems(request)
 
     @ action(detail=False, methods=['post'], permission_classes=[WorkoutDualItemsPermission])
     def record_items(self, request, pk=None):

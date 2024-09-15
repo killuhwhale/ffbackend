@@ -16,6 +16,11 @@ emulator -noaudio -avd Pixel_4_API_30_2 &
 cd ~/ws_p38/fitform/RepTracker && adb -s emulator-5554 reverse tcp:8000 tcp:8000 &&  adb -s emulator-5554 reverse tcp:8081 tcp:8081 && npx expo run:android
 ```
 
+
+``` Local Postgres Docker
+psql -U postgres
+```
+
 Google ADs
 https://apps.admob.com/v2/home?pli=1
 

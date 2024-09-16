@@ -11,6 +11,7 @@ from PIL import Image
 from rest_framework import viewsets, status
 from rest_framework.parsers import JSONParser, MultiPartParser, FormParser, FileUploadParser
 from rest_framework.decorators import action
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import BasePermission, SAFE_METHODS
 from rest_framework.response import Response
 from typing import Any, Dict, List
@@ -18,7 +19,7 @@ import environ
 import json
 import pytz
 from gyms.serializers import (
-    CombinedWorkoutGroupsAsWorkoutGroupsSerializer, CompletedWorkoutCreateSerializer, CompletedWorkoutGroupsSerializer,
+    CombinedWorkoutGroupsSerializerNoWorkouts, CompletedWorkoutCreateSerializer, CompletedWorkoutGroupsSerializer,
     CompletedWorkoutSerializer, GymClassSerializerWithWorkoutsCompleted, ProfileGymClassFavoritesSerializer, ProfileGymFavoritesSerializer,
     ProfileWorkoutGroupsSerializer, UserSerializer, UserWithoutEmailSerializer,
     WorkoutCategorySerializer, GymSerializerWithoutClasses,
@@ -1057,7 +1058,7 @@ class WorkoutGroupsViewSet(viewsets.ModelViewSet, WorkoutGroupsPermission):
 
 
 
-        return Response(to_data("Testing duplicate..."))
+        return Response(WorkoutGroupsSerializer(workout_group, context={'request': request}).data)
         # workouts = json.loads(data['workouts'])
         # for workout in workouts:
 
@@ -1398,7 +1399,7 @@ class WorkoutItemsViewSet(viewsets.ModelViewSet,  WorkoutItemsPermission ):
 
             if not workout:
                 # TODO() Throw error?
-                return Response(to_err("Workout not found"))
+                return Response(to_data("Workout not found"))
 
             print('Items', workout_items)
             print('Workout ID:', workout_id)
@@ -1412,14 +1413,14 @@ class WorkoutItemsViewSet(viewsets.ModelViewSet,  WorkoutItemsPermission ):
 
             return Response(WorkoutItemSerializer(WorkoutItems.objects.bulk_create(items), many=True).data)
         except Exception as e:
-            print(e)
-            return Response(to_err("Failed to insert"))
+            print("create_items err: ", e)
+            return Response(to_err("Failed to insert"), e)
 
 
 
     @ action(detail=False, methods=['post'], permission_classes=[WorkoutItemsPermission])
     def items(self, request, pk=None):
-       self.create_items(request)
+       return self.create_items(request)
 
 
     def get_serializer_class(self):
@@ -2066,6 +2067,14 @@ class BodyMeasurementsViewSet(viewsets.ModelViewSet, SelfActionPermission):
     permission_classes = [SuperUserWritePermission]
 
 
+
+
+
+
+class WorkoutGroupPagination(PageNumberPagination):
+    page_size = 12
+
+
 class ProfileViewSet(viewsets.ViewSet):
 
     @ action(detail=False, methods=['GET'], permission_classes=[])
@@ -2107,14 +2116,54 @@ class ProfileViewSet(viewsets.ViewSet):
         workouts = dict()
         data = dict()
 
+        # Fetch both workout groups
         wgs = WorkoutGroups.objects.filter(
-            owner_id=user_id, owned_by_class=False, archived=False).order_by('for_date')
+            owner_id=user_id, owned_by_class=False, archived=False).order_by('-for_date')
         cwgs = CompletedWorkoutGroups.objects.filter(
-            user_id=user_id).order_by('for_date')
-        data['created_workout_groups'] = wgs
-        data['completed_workout_groups'] = cwgs
-        workouts['workout_groups'] = data
-        return Response(ProfileWorkoutGroupsSerializer(workouts,  context={'request': request, }).data)
+            user_id=user_id).order_by('-for_date')
+
+        # Combine both querysets into a dict
+        data = {
+            'created_workout_groups': wgs,
+            'completed_workout_groups': cwgs
+        }
+
+        # Use the combined data in the serializer
+        combined_data = CombinedWorkoutGroupsSerializerNoWorkouts(data, context={'request': request}).data
+
+        # Paginate the combined result
+        paginator = WorkoutGroupPagination()
+        paginated_combined_data = paginator.paginate_queryset(combined_data['created_workout_groups'] + combined_data['completed_workout_groups'], request)
+
+        # Return the paginated response
+        return paginator.get_paginated_response(paginated_combined_data)
+
+        # wgs = WorkoutGroups.objects.filter(
+        #     owner_id=user_id, owned_by_class=False, archived=False).order_by('for_date')
+        # cwgs = CompletedWorkoutGroups.objects.filter(
+        #     user_id=user_id).order_by('for_date')
+
+        # paginator = WorkoutGroupPagination()
+
+        # created_workout_groups_page = paginator.paginate_queryset(wgs, request)
+        # completed_workout_groups_page = paginator.paginate_queryset(cwgs, request)
+
+
+
+        # # data['created_workout_groups'] = wgs
+        # # data['completed_workout_groups'] = cwgs
+        # data['created_workout_groups'] = ProfileWorkoutGroupsSerializer(
+        #     created_workout_groups_page, many=True, context={'request': request}
+        # ).data
+
+        # data['completed_workout_groups'] = ProfileWorkoutGroupsSerializer(
+        #     completed_workout_groups_page, many=True, context={'request': request}
+        # ).data
+
+        # workouts['workout_groups'] = data
+
+        # # return Response()
+        # return paginator.get_paginated_response(ProfileWorkoutGroupsSerializer(workouts,  context={'request': request, }).data)
 
 
 

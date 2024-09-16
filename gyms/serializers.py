@@ -313,14 +313,14 @@ class CombinedWorkoutGroupsSerializerNoWorkouts(serializers.Serializer):
     def get_created_workout_groups(self, instance):
         print("Instance: ", instance)
         print("Context: ", self.context)
-        cwgs = instance['created_workout_groups'].order_by('for_date')
+        cwgs = instance['created_workout_groups'].order_by('-for_date')
         print("This should be sorted by for_date", cwgs)
 
         return WorkoutGroupsAutoCompletedSerializer(cwgs, context=self.context,
                                                     many=True, required=False).data
 
     def get_completed_workout_groups(self, instance):
-        wgs = instance['completed_workout_groups'].order_by('for_date')
+        wgs = instance['completed_workout_groups'].order_by('-for_date')
         return CompletedWorkoutGroupsNoWorkoutsSerializer(wgs, context=self.context,
                                                           many=True, required=False).data
 

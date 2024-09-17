@@ -2072,7 +2072,8 @@ class BodyMeasurementsViewSet(viewsets.ModelViewSet, SelfActionPermission):
 
 
 class WorkoutGroupPagination(PageNumberPagination):
-    page_size = 12
+    # const PAGE_SIZE = 20;
+    page_size = 20 # Must Match FrontEnd -> (apps) index.tsx
 
 
 class ProfileViewSet(viewsets.ViewSet):

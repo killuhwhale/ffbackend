@@ -2134,7 +2134,7 @@ class ProfileViewSet(viewsets.ViewSet):
         # Paginate the combined result
         paginator = WorkoutGroupPagination()
         paginated_combined_data = paginator.paginate_queryset(combined_data['created_workout_groups'] + combined_data['completed_workout_groups'], request)
-
+        print(f"Paginated data: ", paginated_combined_data)
         # Return the paginated response
         return paginator.get_paginated_response(paginated_combined_data)
 

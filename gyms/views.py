@@ -1246,21 +1246,25 @@ class WorkoutsViewSet(viewsets.ModelViewSet, DestroyWithPayloadMixin, WorkoutPer
     permission_classes = [WorkoutPermission]
 
     def create(self, request):
-        workout_group_id = request.data.get('group')
+        try:
+            workout_group_id = request.data.get('group')
 
-        workout_group = WorkoutGroups.objects.get(id=workout_group_id)
-        if workout_group.finished:
-            return Response({'error': 'Workout already finsined'})
+            workout_group = WorkoutGroups.objects.get(id=workout_group_id)
+            if workout_group.finished:
+                return Response({'error': 'Workout already finsined'})
 
-        data = {**request.data.dict(), 'group_id': workout_group_id}
-        del data['group']
+            data = {**request.data.dict(), 'group_id': workout_group_id}
+            del data['group']
 
-        print('Workout data:', data)
-        workout, new_or_nah = Workouts.objects.get_or_create(**data)
-        if not new_or_nah:
-            return Response(to_err("Workout with this data already exists."))
+            print('Workout data:', data)
+            workout, new_or_nah = Workouts.objects.get_or_create(**data)
+            if not new_or_nah:
+                return Response(to_err("Workout with this data already exists."))
+            return Response(WorkoutCreateSerializer(workout).data)
+        except Exception as err:
+            print(f"Error creating Workout: ", err)
+            return Response(to_err("Error creating Workout", err))
 
-        return Response(WorkoutCreateSerializer(workout).data)
 
 
     def update(self, request, *args, **kwargs):

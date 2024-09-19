@@ -1263,7 +1263,7 @@ class WorkoutsViewSet(viewsets.ModelViewSet, DestroyWithPayloadMixin, WorkoutPer
             return Response(WorkoutCreateSerializer(workout).data)
         except Exception as err:
             print(f"Error creating Workout: ", err)
-            return Response(to_err("Error creating Workout", err))
+            return Response(to_err(str(err), err))
 
 
 

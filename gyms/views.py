@@ -367,6 +367,9 @@ class WorkoutGroupsPermission(BasePermission):
                 for a class they own or are a coach of."""
 
     def has_permission(self, request, view):
+
+        print("WorkoutGroup Perm: ",  request.method, view.action)
+
         if view.action == "update" or view.action == "partial_update" or request.method == "PATCH":
             return False
         elif request.method in SAFE_METHODS:

@@ -1,3 +1,16 @@
+# notes
+- temp removed ads via UserSerializer on backend (App Store wont let me submit with test ads, need approval in store before ads give me non-test ads.... so remove for now to get published...)
+class UserSerializer(serializers.HyperlinkedModelSerializer):
+    membership_on = serializers.SerializerMethodField()
+
+    def get_membership_on(self, instance):
+        return False
+
+    class Meta:
+        model = get_user_model()
+        fields = ['username', 'email', 'id',  'sub_end_date', 'customer_id', 'membership_on']
+
+
 # Google Drive Link
 https://docs.google.com/document/d/1QtKaH68WTCxmLotRMc2nixt8vxDa7ziKiVWk8xLwTz4/edit?usp=sharing
 
@@ -16,6 +29,9 @@ emulator -noaudio -avd Pixel_4_API_30_2 &
 cd ~/ws_p38/fitform/RepTracker && adb -s emulator-5554 reverse tcp:8000 tcp:8000 &&  adb -s emulator-5554 reverse tcp:8081 tcp:8081 && npx expo run:android
 ```
 
+'''Build
+eas build --platform android --local --profile production
+'''
 
 ``` Local Postgres Docker
 psql -U postgres

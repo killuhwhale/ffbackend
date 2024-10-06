@@ -19,6 +19,7 @@ router.register(r'profile', views.ProfileViewSet, basename='profile')
 router.register(r'stats', views.StatsViewSet, basename='stats')
 router.register(r'account', views.RemoveAccount, basename='account')
 router.register(r'snapshot', views.SnapshotViewSet, basename='snapshot')
+router.register(r'appcontrol', views.AppControlViewSet, basename='appcontrol')
 # router.register(r'bodyMeasurements', views.BodyMeasurementsViewSet)
 
 

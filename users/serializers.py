@@ -18,9 +18,14 @@ class UserCreateSerializer(serializers.HyperlinkedModelSerializer):
 
 
 class UserSerializer(serializers.HyperlinkedModelSerializer):
+    membership_on = serializers.SerializerMethodField()
+
+    def get_membership_on(self, instance):
+        return False
+
     class Meta:
         model = get_user_model()
-        fields = ['username', 'email', 'id',  'sub_end_date', 'customer_id']
+        fields = ['username', 'email', 'id',  'sub_end_date', 'customer_id', 'membership_on']
 
 
 class UserWithoutEmailSerializer(serializers.HyperlinkedModelSerializer):

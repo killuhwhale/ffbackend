@@ -2,6 +2,7 @@ from importlib.metadata import requires
 from django.core.serializers import serialize
 from itertools import chain
 from rest_framework import serializers
+from users.serializers import UserSerializer
 from gyms.models import (
     BodyMeasurements, CompletedWorkoutDualItems, CompletedWorkoutGroups, CompletedWorkoutItems, CompletedWorkouts, GymClassFavorites, ClassMembers, Coaches,
     Gyms, GymClasses, GymFavorites, LikedWorkouts, WorkoutCategories,
@@ -411,11 +412,11 @@ class BodyMeasurementsSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
-class UserSerializer(serializers.Serializer):
-    username = serializers.CharField()
-    email = serializers.CharField(required=False)
-    id = serializers.IntegerField()
-    sub_end_date = serializers.DateTimeField()
+# class UserSerializer(serializers.Serializer):
+#     username = serializers.CharField()
+#     email = serializers.CharField(required=False)
+#     id = serializers.IntegerField()
+#     sub_end_date = serializers.DateTimeField()
 
 
 class UserWithoutEmailSerializer(serializers.Serializer):

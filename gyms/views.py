@@ -6,6 +6,7 @@ from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.db.utils import InternalError, IntegrityError
 from django.db.models import Q
+from django.http import JsonResponse
 from itertools import chain
 from PIL import Image
 from rest_framework import viewsets, status
@@ -382,6 +383,7 @@ class WorkoutGroupsPermission(BasePermission):
                     - Workouts for classes cannot be created.
                     - Workouts for users can only be created once per day including Completed Workouts
             '''
+
             user_is_member = is_member(request.user)
 
             if jbool(request.data.get("owned_by_class")):
@@ -2098,6 +2100,7 @@ class ProfileViewSet(viewsets.ViewSet):
         user_id = request.user.id
         profile_data['measurements'] = BodyMeasurements.objects.filter(
             user_id=user_id)
+        profile_data['membership_on'] = True # Used to control if the app should respect membership features in regards to showing ads since they are test ads.
 
         return Response(ProfileSerializer(profile_data,  context={'request': request, }).data)
 
@@ -2381,5 +2384,17 @@ class SnapshotViewSet(viewsets.ViewSet):
                 # ).data
             ))
         )
+
+
+class AppControlViewSet(viewsets.ViewSet):
+    '''
+     Returns workouts between a range of dates either for a user's workouts or a classes workouts.
+    '''
+    @action(detail=False, methods=['GET'], permission_classes=[])
+    def membership_on(self, request, pk=None):
+
+        return JsonResponse({
+            'membership_on': False
+        })
 
 

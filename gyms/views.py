@@ -2331,6 +2331,16 @@ class SnapshotViewSet(viewsets.ViewSet):
      Returns workouts between a range of dates either for a user's workouts or a classes workouts.
     '''
     @action(detail=False, methods=['GET'], permission_classes=[])
+    def ads(self, request, pk=None):
+
+        return JsonResponse({
+            'ios_interstitial': "ca-app-pub-9369132738006643/7186179931",
+            'ios_banner': "ca-app-pub-9369132738006643/3869438496",
+            'android_interstitial': "",
+            'android_banner': "",
+        })
+
+    @action(detail=False, methods=['GET'], permission_classes=[])
     def user_daily(self, request, pk=None):
         user_id = request.user.id
         # Date given            2023-10-09

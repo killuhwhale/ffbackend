@@ -21,7 +21,7 @@ class UserSerializer(serializers.HyperlinkedModelSerializer):
     membership_on = serializers.SerializerMethodField()
 
     def get_membership_on(self, instance):
-        return False
+        return True
 
     class Meta:
         model = get_user_model()

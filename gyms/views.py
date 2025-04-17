@@ -3,12 +3,15 @@ from django.utils import timezone
 from enum import Enum
 from django.core.files.uploadedfile import InMemoryUploadedFile, TemporaryUploadedFile
 from django.contrib.auth import get_user_model
+from django.contrib.postgres.search import TrigramSimilarity
 from django.db import transaction
 from django.db.utils import InternalError, IntegrityError
-from django.db.models import Q
+from django.db.models import Q, Max
+from django.db.models.functions import Greatest
 from django.http import JsonResponse
 from itertools import chain
 from PIL import Image
+from instafitAPI import settings
 from rest_framework import viewsets, status
 from rest_framework.parsers import JSONParser, MultiPartParser, FormParser, FileUploadParser
 from rest_framework.decorators import action
@@ -19,6 +22,13 @@ from typing import Any, Dict, List
 import environ
 import json
 import pytz
+import openai
+
+import tiktoken
+
+from openai import OpenAI
+
+
 from gyms.serializers import (
     CombinedWorkoutGroupsSerializerNoWorkouts, CompletedWorkoutCreateSerializer, CompletedWorkoutGroupsSerializer,
     CompletedWorkoutSerializer, GymClassSerializerWithWorkoutsCompleted, ProfileGymClassFavoritesSerializer, ProfileGymFavoritesSerializer,
@@ -30,17 +40,32 @@ from gyms.serializers import (
     WorkoutDualItemSerializer, WorkoutDualItemCreateSerializer,
     WorkoutItemCreateSerializer, CoachesCreateSerializer, ClassMembersCreateSerializer,
     GymClassFavoritesSerializer, GymFavoritesSerializer, LikedWorkoutsSerializer, WorkoutGroupsSerializer,
-    WorkoutCreateSerializer, ProfileSerializer
+    WorkoutCreateSerializer, ProfileSerializer, WorkoutNameMinimalSerializer, UserWorkoutMaxSerializer,
+    UserWorkoutMaxHistorySerializer, WorkoutNameMaxSerializer,
 )
 
-from gyms.models import (BodyMeasurements, CompletedWorkoutDualItems, CompletedWorkoutGroups, CompletedWorkoutItems,
-                        CompletedWorkouts, Gyms, GymClasses, ResetPasswords, WorkoutCategories, Workouts, WorkoutItems, WorkoutNames,
-                        Coaches, ClassMembers, GymClassFavorites, GymFavorites, LikedWorkouts, WorkoutGroups, WorkoutDualItems)
+from gyms.models import (TokenQuota,
+    BodyMeasurements, CompletedWorkoutDualItems, CompletedWorkoutGroups, CompletedWorkoutItems,
+    CompletedWorkouts, Gyms, GymClasses, ResetPasswords, UserWorkoutMax, UserWorkoutMaxHistory, WorkoutCategories, WorkoutStats, Workouts, WorkoutItems, WorkoutNames,
+    Coaches, ClassMembers, GymClassFavorites, GymFavorites, LikedWorkouts, WorkoutGroups, WorkoutDualItems)
 from utils import rev_preserve_day
 from .s3 import s3Client
 
+with open("gyms/create_workout_schema.json") as f:
+    openai_schema = json.load(f)
 
+tools = [
+    {
+        "type": "function",
+        "function": {
+           "name": openai_schema["name"],  # make sure your JSON includes this
+            "description": openai_schema.get("description", "No description."),
+            "parameters": openai_schema["parameters"]
+        }
+    }
+]
 
+client = OpenAI(api_key=settings.OPENAI_API_KEY)
 tz = pytz.timezone("US/Pacific")
 s3_client = s3Client()
 env = environ.Env()
@@ -441,7 +466,7 @@ class WorkoutItemsPermission(BasePermission):
 
     def has_permission(self, request, view):
         # Workout Items are create in bulk and are not modified nor deleted directly.
-        print("WorkoutITems 403 checkkkkzzzz", request.method, type(view.action))
+        # print("WorkoutITems 403 checkkkkzzzz", request.method, type(view.action))
         if view.action == "create"  or view.action == "partial_update" or view.action == "destroy":
             return False
         elif request.method in SAFE_METHODS:
@@ -481,7 +506,7 @@ class WorkoutDualItemsPermission(BasePermission):
 
     def has_permission(self, request, view):
         # Workout Items are create in bulk and are not modified nor deleted directly.
-        print("WorkoutITems 403 checkkkk", request.method, view.action)
+        # print("WorkoutITemsDual 403 checkkkk", request.method, view.action)
         if view.action == "create" or view.action == "update" or view.action == "partial_update" or view.action == "destroy":
             return False
         elif request.method in SAFE_METHODS:
@@ -563,11 +588,35 @@ class CompletedWorkoutsPermission(BasePermission):
         return False
 
 
+class UserMaxesPermission(BasePermission):
+    message = """UserMaxesPermission: Only users can perform actions for themselves."""
+
+    def has_permission(self, request, view):
+
+        target_user_id = None
+        if request.method in SAFE_METHODS:
+            target_user_id = request.query_params.get("user_id")
+        else:
+            target_user_id = str(request.data.get("user_id"))
+
+        print("User self action perm: ", target_user_id, request.user.id)
+        return target_user_id == str(request.user.id)
+
 class SelfActionPermission(BasePermission):
     message = """Only users can perform actions for themselves."""
 
     def has_permission(self, request, view):
-        return str(request.data.get("user_id")) == str(request.user.id)
+
+
+        target_user_id = None
+        print("Usererzzzzz: ", request.data.keys())
+        if request.method in SAFE_METHODS:
+            target_user_id = request.query_params.get("user_id")
+        else:
+            target_user_id = str(request.data.get("user_id"))
+
+        print("User self action perm: ", target_user_id, request.user.id)
+        return target_user_id == str(request.user.id)
 
 
 class DestroyWithPayloadMixin(object):
@@ -1037,11 +1086,20 @@ class WorkoutGroupsViewSet(viewsets.ModelViewSet, WorkoutGroupsPermission):
                 del workout_json['workout_items']
                 del workout_json['id']
 
+
+                print(f"{workout_json=}")
+                workout_stats_json =  workout_json['stats']
+                del workout_json['stats']
+
+
                 workout_data = {**workout_json, 'group_id': workout_group.id}
                 del workout_data['group']
+                print(f"{workout_data=}")
 
                 workout, new_or_nah = Workouts.objects.get_or_create(**workout_data)
                 print(f'Got Workout ({new_or_nah=}):', f"{workout.scheme_type=}")
+                workout_stats = WorkoutStats.objects.create(workout=workout, tags=workout_stats_json['tags'], items=workout_stats_json['items'])
+                print(f'Created WorkoutState {workout_stats=}')
 
                 new_items = []
                 for item_json in items:
@@ -1224,7 +1282,8 @@ class WorkoutGroupsViewSet(viewsets.ModelViewSet, WorkoutGroupsPermission):
         workout_group = WorkoutGroups.objects.get(id=workout_group_id)
         if workout_group.finished:
             workout_group.archived = True
-            workout_group.date_archived = datetime.now()
+            # workout_group.date_archived = datetime.now()
+            workout_group.date_archived = timezone.now()
             workout_group.save()
             return Response(WorkoutGroupsSerializer(workout_group, context={'request': request}).data)
         workout_group.delete()
@@ -1250,6 +1309,14 @@ class WorkoutsViewSet(viewsets.ModelViewSet, DestroyWithPayloadMixin, WorkoutPer
     serializer_class = WorkoutSerializer
     permission_classes = [WorkoutPermission]
 
+    def get_serializer_class(self):
+        if self.action == 'list' or self.action == 'retrieve':
+            return WorkoutSerializer
+        if self.action == 'create':
+            return WorkoutCreateSerializer
+        return WorkoutSerializer
+
+
     def create(self, request):
         try:
             workout_group_id = request.data.get('group')
@@ -1263,8 +1330,9 @@ class WorkoutsViewSet(viewsets.ModelViewSet, DestroyWithPayloadMixin, WorkoutPer
 
             print('Workout data:', data)
             workout, new_or_nah = Workouts.objects.get_or_create(**data)
-            if not new_or_nah:
-                return Response(to_err("Workout with this data already exists."))
+            # if not new_or_nah:
+            #     return Response(to_err("Workout with this data already exists."))
+
             return Response(WorkoutCreateSerializer(workout).data)
         except Exception as err:
             print(f"Error creating Workout: ", err)
@@ -1307,12 +1375,7 @@ class WorkoutsViewSet(viewsets.ModelViewSet, DestroyWithPayloadMixin, WorkoutPer
     #         print(f"Error getting workout by id: {err=}")
     #     return Response(WorkoutSerializer(workout).data)
 
-    def get_serializer_class(self):
-        if self.action == 'list' or self.action == 'retrieve':
-            return WorkoutSerializer
-        if self.action == 'create':
-            return WorkoutCreateSerializer
-        return WorkoutSerializer
+
 
     def destroy(self, request, pk=None):
         workout_id = pk
@@ -1406,6 +1469,16 @@ class WorkoutItemsViewSet(viewsets.ModelViewSet,  WorkoutItemsPermission ):
             workout_id = request.data.get("workout", 0)
             workout = Workouts.objects.get(id=workout_id)
 
+
+            names = request.data.get('names')
+            tags = request.data.get('tags')
+
+            if isinstance(names, str):
+                names = json.loads(names)
+            if isinstance(tags, str):
+                tags = json.loads(tags)
+
+
             if not workout:
                 # TODO() Throw error?
                 return Response(to_data("Workout not found"))
@@ -1419,8 +1492,15 @@ class WorkoutItemsViewSet(viewsets.ModelViewSet,  WorkoutItemsPermission ):
                 del w['workout']
                 items.append(WorkoutItems(
                     **{**w, "workout": Workouts(id=workout_id), "name": WorkoutNames(id=w['name']['id'])}))
+            created_workout_items = WorkoutItems.objects.bulk_create(items)
 
-            return Response(WorkoutItemSerializer(WorkoutItems.objects.bulk_create(items), many=True).data)
+            wStats, mewly_created = WorkoutStats.objects.get_or_create(workout_id=workout.id)
+            wStats.tags = tags
+            wStats.items = names
+            wStats.save()
+            print("Created stats: ", wStats)
+
+            return Response(WorkoutItemSerializer(created_workout_items, many=True).data)
         except Exception as e:
             print("create_items err: ", e)
             return Response(to_err("Failed to insert"), e)
@@ -1460,6 +1540,15 @@ class WorkoutDualItemsViewSet(viewsets.ModelViewSet,  WorkoutItemsPermission ):
             workout_id = request.data.get("workout", 0)
             workout = Workouts.objects.get(id=workout_id)
 
+
+            names = request.data.get('names')
+            tags = request.data.get('tags')
+
+            if isinstance(names, str):
+                names = json.loads(names)
+            if isinstance(tags, str):
+                tags = json.loads(tags)
+
             if not workout:
                 # TODO() Throw error?
                 return Response(to_err("Workout not found"))
@@ -1473,6 +1562,9 @@ class WorkoutDualItemsViewSet(viewsets.ModelViewSet,  WorkoutItemsPermission ):
                 del w['workout']
                 items.append(WorkoutDualItems(
                     **{**w, "workout": Workouts(id=workout_id), "name": WorkoutNames(id=w['name']['id'])}))
+
+            wStats = WorkoutStats.objects.create(workout_id=workout.id, items=names, tags=tags)
+            print("Created stats: ", wStats)
 
             return Response(WorkoutDualItemSerializer(WorkoutDualItems.objects.bulk_create(items), many=True).data)
         except Exception as e:
@@ -2065,6 +2157,148 @@ class ClassMembersViewSet(viewsets.ModelViewSet, MemberPermission):
             return ClassMembersCreateSerializer
         return ClassMembersSerializer
 
+
+class WorkoutMaxViewSet(viewsets.ModelViewSet):
+    """ViewSet for handling workout maxes"""
+    permission_classes = [SelfActionPermission]
+
+    def get_serializer_class(self):
+        if self.action == 'history':
+            return UserWorkoutMaxHistorySerializer
+        elif self.action == 'list_workouts':
+            return WorkoutNameMaxSerializer
+        return UserWorkoutMaxSerializer
+
+    def get_queryset(self):
+        """Return maxes for the current user only"""
+        if self.action == 'history':
+            return UserWorkoutMaxHistory.objects.filter(
+                user=self.request.user
+            ).order_by('-recorded_date')
+        return UserWorkoutMax.objects.filter(
+            user=self.request.user
+        ).order_by('workout_item__name')
+
+    def perform_create(self, serializer):
+        """Set the user when creating a new max record"""
+        serializer.save(user=self.request.user)
+
+    @action(detail=False, methods=['GET'])
+    def list_workouts(self, request):
+        """List all workout items with their current max values for the user"""
+        workout_names = WorkoutNames.objects.all()
+        serializer = self.get_serializer(workout_names, many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['GET'])
+    def history(self, request, pk=None):
+        """Get history for a specific workout item max"""
+        try:
+            workout_name = WorkoutNames.objects.get(pk=pk)
+            history = UserWorkoutMaxHistory.objects.filter(
+                user_id=request.user.id,
+                workout_name=workout_name
+            ).order_by('-recorded_date')
+
+            serializer = self.get_serializer(history, many=True)
+            return Response(serializer.data)
+        except WorkoutItems.DoesNotExist:
+            return Response(
+                {'error': 'Workout item not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+    @action(detail=False, methods=['POST'])
+    def update_max(self, request):
+        """Update a user's max for a workout item and record in history"""
+        print("Update_max: ", request.data.keys(), )
+        workout_name_id = request.data.get('workout_name_id')
+
+        max_value = request.data.get('max_value')
+        unit = request.data.get('unit', 'kg')  # Default to kg if not specified
+        notes = request.data.get('notes', '')
+
+
+        if not workout_name_id or max_value is None:
+            print("{'error': 'workout_name_id and max_value are required'},")
+            return Response(
+                {'error': 'workout_name_id and max_value are required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            max_value = float(max_value)
+        except ValueError:
+            print("{'error': 'max_value must be a number'},")
+            return Response(
+                {'error': 'max_value must be a number'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            workout_name = WorkoutNames.objects.get(id=workout_name_id)
+        except WorkoutItems.DoesNotExist:
+            print("{'error': 'Workout item not found'} id: ", workout_name_id)
+            return Response(
+                {'error': 'Workout item not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # 1. Update or create the current max record
+        current_max, created = UserWorkoutMax.objects.update_or_create(
+            user_id=request.user.id,
+            workout_name=workout_name,
+            defaults={
+                'max_value': max_value,
+                'unit': unit,
+                'notes': notes
+            }
+        )
+
+        # 2. Add to history log
+        history_record = UserWorkoutMaxHistory.objects.create(
+            user_id=request.user.id,
+            workout_name=workout_name,
+            max_value=max_value,
+            unit=unit,
+            notes=notes,
+
+        )
+
+        res = {
+            'current_max': UserWorkoutMaxSerializer(current_max).data,
+            'history_record': UserWorkoutMaxHistorySerializer(history_record).data
+        }
+        print("Update_max res: ", res)
+
+        return Response(res)
+
+    @action(detail=True, methods=['GET'])
+    def progress(self, request, pk=None):
+        """Get progress data for a specific workout item"""
+        try:
+            workout_item = WorkoutItems.objects.get(pk=pk)
+            history = UserWorkoutMaxHistory.objects.filter(
+                user_id=request.user.id,
+                workout_item=workout_item
+            ).order_by('recorded_date')
+
+            # Format data for chart display
+            progress_data = [{
+                'date': record.recorded_date.strftime('%Y-%m-%d'),
+                'value': record.max_value,
+                'unit': record.unit
+            } for record in history]
+
+            return Response(progress_data)
+        except WorkoutItems.DoesNotExist:
+            return Response(
+                {'error': 'Workout item not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+
+
 # Not used... but could be
 class BodyMeasurementsViewSet(viewsets.ModelViewSet, SelfActionPermission):
     """
@@ -2084,6 +2318,75 @@ class WorkoutGroupPagination(PageNumberPagination):
     # const PAGE_SIZE = 20;
     page_size = 20 # Must Match FrontEnd -> (apps) index.tsx
 
+
+
+def count_tokens(text: str, model="gpt-3.5-turbo") -> int:
+    enc = tiktoken.encoding_for_model(model)
+    return len(enc.encode(text))
+
+def count_message_tokens(messages: list, model="gpt-3.5-turbo") -> int:
+    enc = tiktoken.encoding_for_model(model)
+    tokens = 0
+    for m in messages:
+        tokens += 4  # base cost per message (OpenAI rule of thumb)
+        tokens += len(enc.encode(m["content"]))
+    tokens += 2  # for assistant priming
+    return tokens + 2 ## Good measure
+
+class AIViewSet(viewsets.ViewSet):
+    @action(detail=False, methods=['POST'], permission_classes=[SelfActionPermission])
+    def create_workout(self, request, pk=None):
+
+        quota, newly_created = TokenQuota.objects.get_or_create(user_id=request.user.id)
+        prompt = request.data.get('prompt') # Goal
+        scheme_type_text = request.data.get('scheme_type_text')
+        if not prompt:
+            return Response({"error": ' No prompt given'})
+
+
+        remaining = quota.remaining_tokens
+
+        messages=[
+            {"role": "system", "content": "You are a helpful super awesome Sports Strength and Conditioning Coach, your athlete needs a tailored workout plan that will map to their workout app so only structure output in json."},
+            {"role": "user", "content": f"User Goal: {prompt} --- Workout Scheme Style: {scheme_type_text}"},
+        ]
+
+
+        input_tokens = count_message_tokens(messages)
+        if input_tokens >= remaining:
+            return Response({"error": "Token quota exceeded"}, status=403)
+
+        print("Input token: ", input_tokens)
+        max_output_tokens = remaining - input_tokens
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",  # or "gpt-4" if you have access
+            # model="gpt-3.5-turbo",  # or "gpt-4" if you have access
+            temperature=0.7,
+            messages=messages,
+            max_tokens=min(4096 - input_tokens, max_output_tokens - input_tokens),
+            tools=tools,
+            tool_choice="auto",
+        )
+
+        output_tokens = response.usage.completion_tokens
+        input_tokens = response.usage.prompt_tokens
+        total_tokens = response.usage.total_tokens
+        # total_used = input_tokens + output_tokens
+
+        quota.use_tokens(total_tokens)
+        # update tokens
+        print("Tokens used: ", total_tokens)
+
+        # message = response.choices[0].message.content.strip()
+
+
+        tool_call = response.choices[0].message.tool_calls[0]
+        arguments = json.loads(tool_call.function.arguments)
+        print(f"{arguments=}")
+
+
+        return Response({'data': arguments})
 
 class ProfileViewSet(viewsets.ViewSet):
 
@@ -2120,6 +2423,39 @@ class ProfileViewSet(viewsets.ViewSet):
         data['favorite_gym_classes'] = GymClassFavorites.objects.filter(
             user_id=user_id)
         return Response(ProfileGymClassFavoritesSerializer(data,  context={'request': request, }).data)
+
+    @action(detail=False, methods=['GET'], permission_classes=[SelfActionPermission])
+    def workout_group_query(self, request, pk=None):
+        query = request.query_params.get("query")
+        user_id = request.query_params.get("user_id")
+
+        print(f"Userid : {user_id} WG Query: {query}")
+
+        # results =  WorkoutGroups.objects.annotate(
+        #     similarity=TrigramSimilarity('title', query)
+        # ).filter(
+        #     similarity__gt=0.2,
+        #     owner_id=user_id
+        # ).order_by('-similarity')
+
+
+        results = (
+            WorkoutGroups.objects
+            .filter(owner_id=user_id)
+            .annotate(
+                title_similarity=TrigramSimilarity('title', query),
+                sub_similarity=Max(TrigramSimilarity('workouts__title', query)),  # Trigram against all related workout titles
+            )
+            .annotate(similarity=Greatest('title_similarity', 'sub_similarity'))
+            .filter(similarity__gt=0.2)
+            .order_by('-similarity')
+            .distinct()
+        )
+
+
+        return Response(WorkoutGroupsSerializer(results, many=True, context={"request": request}).data)
+
+
 
     @action(detail=False, methods=['GET'], permission_classes=[])
     def workout_groups(self, request, pk=None):

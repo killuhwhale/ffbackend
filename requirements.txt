@@ -22,6 +22,7 @@ idna==3.4
 jmespath==1.0.1
 maxminddb==2.3.0
 multidict==6.0.4
+openai==1.74.0
 Pillow==9.2.0
 psycopg2==2.9.3
 psycopg2-binary==2.9.6
@@ -39,6 +40,7 @@ six==1.16.0
 sqlparse==0.4.2
 starkbank-ecdsa==2.2.0
 stripe==5.4.0
+tiktoken==0.9.0
 toml==0.10.2
 urllib3==1.26.11
 yarl==1.9.2

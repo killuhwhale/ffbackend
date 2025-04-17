@@ -5,7 +5,7 @@ from rest_framework import serializers
 from users.serializers import UserSerializer
 from gyms.models import (
     BodyMeasurements, CompletedWorkoutDualItems, CompletedWorkoutGroups, CompletedWorkoutItems, CompletedWorkouts, GymClassFavorites, ClassMembers, Coaches,
-    Gyms, GymClasses, GymFavorites, LikedWorkouts, WorkoutCategories,
+    Gyms, GymClasses, GymFavorites, LikedWorkouts, UserWorkoutMax, UserWorkoutMaxHistory, WorkoutCategories, WorkoutStats,
     Workouts, WorkoutItems, WorkoutNames, WorkoutGroups, WorkoutDualItems)
 
 import logging
@@ -172,10 +172,17 @@ class WorkoutDualItemCreateSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
+
+class WorkoutStatsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = WorkoutStats
+        fields = ['tags', 'items']  # list all fields you want to expose
+
+
 class WorkoutSerializer(serializers.ModelSerializer):
     # TODO make this field a function and get the correct set based on scheme_type, either dual or regular...
     workout_items = serializers.SerializerMethodField('items')
-
+    stats = WorkoutStatsSerializer(read_only=True)
 
     def items(self, workout):
         print("Serializing workout: ", workout)
@@ -198,6 +205,7 @@ class WorkoutSerializer(serializers.ModelSerializer):
 
 
 class WorkoutCreateSerializer(serializers.ModelSerializer):
+    stats = WorkoutStatsSerializer(read_only=True)
 
     class Meta:
         model = Workouts
@@ -403,6 +411,56 @@ class LikedWorkoutsSerializer(serializers.ModelSerializer):
     class Meta:
         model = LikedWorkouts
         fields = '__all__'
+
+
+
+class WorkoutNameMinimalSerializer(serializers.ModelSerializer):
+    """A minimal serializer for WorkoutItems to be used in nested relationships"""
+
+    class Meta:
+        model = WorkoutNames
+        fields = ['id', 'name']
+
+class UserWorkoutMaxSerializer(serializers.ModelSerializer):
+    """Serializer for current max values"""
+
+    class Meta:
+        model = UserWorkoutMax
+        fields = ['id', 'workout_name', 'max_value', 'unit', 'last_updated', 'notes']
+        read_only_fields = ['last_updated']
+
+class UserWorkoutMaxHistorySerializer(serializers.ModelSerializer):
+    """Serializer for historical max values"""
+
+    class Meta:
+        model = UserWorkoutMaxHistory
+        fields = ['id', 'workout_name', 'max_value', 'unit', 'recorded_date', 'notes']
+        read_only_fields = ['recorded_date']
+
+class WorkoutNameMaxSerializer(serializers.ModelSerializer):
+    """Serializer for listing workout items with their current max values for a user"""
+    current_max = serializers.SerializerMethodField()
+
+    class Meta:
+        model = WorkoutNames
+        fields = ['id', 'name', 'current_max']
+
+    def get_current_max(self, obj):
+        """Get the current max for this workout item and the current user"""
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return None
+
+        try:
+            user_max = UserWorkoutMax.objects.get(user_id=request.user.id, workout_name=obj)
+            return {
+                'id': user_max.id,
+                'max_value': user_max.max_value,
+                'unit': user_max.unit,
+                'last_updated': user_max.last_updated
+            }
+        except UserWorkoutMax.DoesNotExist:
+            return None
 
 
 class BodyMeasurementsSerializer(serializers.ModelSerializer):

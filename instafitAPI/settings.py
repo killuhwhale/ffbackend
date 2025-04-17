@@ -18,7 +18,9 @@ from datetime import timedelta
 from pathlib import Path
 import dj_database_url
 
-# from rest_framework_simplejwt.authentication import JWTAuthentication
+# Build paths inside the project like this: BASE_DIR / 'subdir'.
+BASE_DIR = Path(__file__).resolve().parent.parent
+
 env = environ.Env(
     # set casting, default value
     DEBUG=(bool, False),
@@ -36,38 +38,33 @@ env = environ.Env(
     DJANGO_ALLOWED_HOSTS=(str, "127.0.0.1,localhost"),
     RUN_ENV=(str, "dev"),
     REVENUECAT_TOKEN=(str, ""),
-)
+    OPENAI_API_KEY=(str, ""),
 
+)
 environ.Env.read_env()
 
 def cenv(key, d=None):
     """Combined  environments."""
     if key in env:
+        print(f"Foudn {key=} in env....")
         return env(key)
     return os.getenv(key, d)
 
-print(cenv("DEVELOPMENT_MODE", "False"))
 DEVELOPMENT_MODE = cenv("DEVELOPMENT_MODE", "False")
+print(DEVELOPMENT_MODE)
 DEBUG =  cenv("RUN_ENV", "False") == "dev"
-print(f"Settings {DEBUG=} {os.getenv('USER')=}")
-
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
-BASE_DIR = Path(__file__).resolve().parent.parent
+print(f"{DEBUG=} {os.getenv('USER')=}")
 
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/4.0/howto/deployment/checklist/
-
-# SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = get_random_secret_key()
+OPENAI_API_KEY = cenv("OPENAI_API_KEY")
+print(f"{OPENAI_API_KEY=}")
 
-# ALLOWED_HOSTS = ["10.0.2.2", 'localhost', '127.0.0.1', '192.168.0.159']
 ALLOWED_HOSTS = cenv("DJANGO_ALLOWED_HOSTS",
                           "127.0.0.1,localhost").split(",")
+print(f"{ALLOWED_HOSTS=}")
 
 FILE_UPLOAD_MAX_MEMORY_SIZE = 5242880 * 2
-
-print(f"{ALLOWED_HOSTS=}")
 
 # https://django-rest-framework-simplejwt.readthedocs.io/en/latest/settings.html#settings
 # JWT_KEY = env('JWT_SIGNING_KEY') if os.getenv("USER") == "killuh" else os.getenv("JWT_SIGNING_KEY", "")

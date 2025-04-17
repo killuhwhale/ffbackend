@@ -1,6 +1,9 @@
+from datetime import timedelta
 from django.db import models
-from django.core.exceptions import ValidationError
-from functools import wraps
+
+from django.contrib.postgres.indexes import GinIndex
+from django.utils import timezone
+
 
 
 
@@ -76,6 +79,9 @@ class WorkoutGroups(models.Model):
 
     class Meta:
         unique_together = [["owner_id", "owned_by_class", "title"]]
+        indexes = [
+            GinIndex(fields=['title'], name='workoutgroup_title_trgm', opclasses=['gin_trgm_ops']),
+        ]
 
 
 class Workouts(models.Model):
@@ -92,6 +98,45 @@ class Workouts(models.Model):
     class Meta:
         unique_together = [['group', 'title']]
 
+
+class TokenQuota(models.Model):
+    user_id = models.CharField(max_length=100, blank=False, null=False, unique=True)
+    remaining_tokens = models.PositiveIntegerField(default=1_000_000)
+    reset_at = models.DateTimeField(default=timezone.now)
+
+    def reset_if_expired(self):
+        if timezone.now() >= self.reset_at:
+            self.remaining_tokens = 1_000_000
+            self.reset_at = timezone.now() + timedelta(days=30)
+            self.save()
+
+    def use_tokens(self, amount: int) -> bool:
+        self.reset_if_expired()
+        if self.remaining_tokens < amount:
+            return False
+        self.remaining_tokens -= amount
+        self.save()
+        return True
+
+    def __str__(self):
+        return f"{self.user_id}: {self.remaining_tokens} tokens (resets {self.reset_at})"
+
+
+
+
+class WorkoutStats(models.Model):
+    workout = models.OneToOneField(
+        Workouts,  # ensure you reference your Workouts model appropriately
+        on_delete=models.CASCADE,
+        related_name='stats'
+    )
+    # JSONField for storing tags (e.g., "Core", "Running", "Squat")
+    tags = models.JSONField(default=dict)
+    # JSONField for storing per-exercise calculated statistics
+    items = models.JSONField(default=dict)
+
+    def __str__(self):
+        return f"Stats for Workout {self.workout.id}"
 
 class WorkoutCategories(models.Model):
     title = models.CharField(max_length=100, unique=True)
@@ -316,6 +361,49 @@ class ResetPasswords(models.Model):
     code = models.CharField(max_length=12, blank=False)
     expires_at = models.DateTimeField(
         blank=True, null=True)  # Updated on add only
+
+
+
+# Current max/total for a workout item per user
+class UserWorkoutMax(models.Model):
+    user_id = models.CharField(max_length=200)
+    workout_name = models.ForeignKey(WorkoutNames, on_delete=models.CASCADE, related_name='user_maxes')
+
+    # The current max/total value for this workout item
+    max_value = models.FloatField()
+    unit = models.CharField(max_length=10, default='kg')
+
+    # When this max was last updated
+    last_updated = models.DateTimeField(auto_now=True)
+
+    # Optional notes about this max (e.g., "PR at competition")
+    notes = models.CharField(max_length=255, blank=True, null=True)
+
+    class Meta:
+        # Ensure each user can only have one current max per workout item
+        unique_together = ('user_id', 'workout_name')
+
+    def __str__(self):
+        return f"{self.user_id} - {self.workout_name.name} Max: {self.max_value} {self.unit}"
+
+
+# History log for tracking changes to maxes over time
+class UserWorkoutMaxHistory(models.Model):
+    user_id = models.CharField(max_length=200)
+    workout_name = models.ForeignKey(WorkoutNames, on_delete=models.CASCADE, related_name='max_history')
+
+    # The recorded max value
+    max_value = models.FloatField()
+    unit = models.CharField(max_length=10, default='kg')
+
+    # When this max was recorded (unlike UserWorkoutMax, we don't use auto_now because we want to preserve the exact timestamp)
+    recorded_date = models.DateTimeField(auto_now_add=True)
+
+    # Optional notes about this max
+    notes = models.CharField(max_length=255, blank=True, null=True)
+
+    def __str__(self):
+        return f"{self.user_id} - {self.workout_name.name} Max: {self.max_value} {self.unit} on {self.recorded_date.strftime('%Y-%m-%d')}"
 
 
 '''

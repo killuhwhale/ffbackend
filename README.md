@@ -166,13 +166,19 @@ https://www.digitalocean.com/community/tutorials/how-to-set-up-django-with-postg
 ## Prod
  cd ffbackend/
  docker compose -f docker-compose_prod.yml up
- docker compose -f docker-compose_prod.yml exec instafitapiprod bash migrate_create.sh
  docker compose -f docker-compose_prod.yml exec instafitapiprod pip install -r requirements.txt
+ docker compose -f docker-compose_prod.yml exec instafitapiprod bash migrate_create.sh
+ ---
  docker compose -f docker-compose_prod.yml exec instafitapiprod python manage.py makemigrations gyms
  docker compose -f docker-compose_prod.yml exec instafitapiprod python manage.py migrate gyms
  docker compose -f docker-compose_prod.yml exec -T instafitapiprod python manage.py shell <  gyms/create_workout_names.py
  docker compose -f docker-compose_prod.yml exec -T instafitapiprod python manage.py shell <  gyms/create_test_data.py
  docker compose -f docker-compose_prod.yml down
+
+### Setup Postgres
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+  - then, makemigrations && migrate
+
 
 ## Test
     Run file from FitForm test_e2e.sh

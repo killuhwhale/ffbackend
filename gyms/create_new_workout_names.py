@@ -319,11 +319,11 @@ for w in workout_names:
 
 
 for wname in updated:
-    cats = [cat + 1 + 224 for cat in wname['categories']]
+    cats = [cat + 1 + 0 for cat in wname['categories']]
     # cats = [cat for cat in wname['categories']]
     del wname['categories']
-    wname['primary_id'] += 1 + 224
-    wname['secondary_id'] += 1 + 224
+    wname['primary_id'] += 1 + 0
+    wname['secondary_id'] += 1 + 0
     try:
         new_obj = WorkoutNames.objects.create(**wname)
         new_obj.categories.set(cats)

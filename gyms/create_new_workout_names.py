@@ -29,11 +29,11 @@ new_categories = {
 }
 
 
-# for cat in categories:
-#     try:
-#         WorkoutCategories.objects.create(**cat)
-#     except Exception as e:
-#         print('Err creating categories ', e)
+for cat in categories:
+    try:
+        WorkoutCategories.objects.create(**cat)
+    except Exception as e:
+        print('Err creating categories ', e)
 
 
 workout_names = [

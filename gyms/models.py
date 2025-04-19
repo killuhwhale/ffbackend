@@ -106,7 +106,7 @@ class TokenQuota(models.Model):
 
     def reset_if_expired(self):
         if timezone.now() >= self.reset_at:
-            self.remaining_tokens = 1_000_000
+            self.remaining_tokens = 1_750_000
             self.reset_at = timezone.now() + timedelta(days=30)
             self.save()
 
@@ -120,7 +120,6 @@ class TokenQuota(models.Model):
 
     def __str__(self):
         return f"{self.user_id}: {self.remaining_tokens} tokens (resets {self.reset_at})"
-
 
 
 

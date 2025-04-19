@@ -173,6 +173,10 @@ https://www.digitalocean.com/community/tutorials/how-to-set-up-django-with-postg
  docker compose -f docker-compose_prod.yml exec instafitapiprod python manage.py migrate gyms
  docker compose -f docker-compose_prod.yml exec -T instafitapiprod python manage.py shell <  gyms/create_workout_names.py
  docker compose -f docker-compose_prod.yml exec -T instafitapiprod python manage.py shell <  gyms/create_test_data.py
+ docker compose -f docker-compose_prod.yml exec -T instafitapiprod python manage.py shell <  gyms/5_3_1_template.py
+
+ docker compose -f docker-compose_prod.yml exec -T instafitapiprod python manage.py export_workouts
+
  docker compose -f docker-compose_prod.yml down
 
 ### Setup Postgres

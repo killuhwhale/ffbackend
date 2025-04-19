@@ -443,7 +443,7 @@ class WorkoutNameMaxSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = WorkoutNames
-        fields = ['id', 'name', 'current_max']
+        fields = ['id', 'name', 'current_max', ]
 
     def get_current_max(self, obj):
         """Get the current max for this workout item and the current user"""

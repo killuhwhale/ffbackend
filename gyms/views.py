@@ -88,6 +88,13 @@ FILES_KINDS = ['gyms', 'classes', 'workouts',
                "names", 'users', "completedWorkouts"]
 
 
+
+def today_UTC(request):
+    today = datetime.now(pytz.timezone(request.tz)).date()
+    return replace_tz_with_UTC(today, request.tz)
+
+
+
 def is_gymclass_member(user, gym_class):
     return user and gym_class and gym_class.classmembers_set.filter(
         user_id=user.id).exists()
@@ -101,15 +108,16 @@ def is_gymclass_coach(user, gym_class):
 def is_gym_class_owner(user, gym_class):
     return user and gym_class and str(user.id) == str(gym_class.gym.owner_id)
 
-def is_member(user):
+def is_member(request):
     """ Given a user return True if the user's sub_end_date is greater than two-days ago (leeway) """
     leeway = MEMBERSHIP_LEEWAY  # Number of days of leeway
 
     # Calculate the date two days ago
-    two_days_ago = datetime.today() - timedelta(days=leeway)
+    # two_days_ago = datetime.today() - timedelta(days=leeway)
+    two_days_ago = today_UTC(request) - timedelta(days=leeway)
 
     # Check if the user's sub_end_date is greater than two days ago
-    return user.sub_end_date.replace(tzinfo=timezone.utc) > two_days_ago.replace(tzinfo=timezone.utc)
+    return request.user.sub_end_date.replace(tzinfo=timezone.utc) > two_days_ago.replace(tzinfo=timezone.utc)
 
 class ResponseError(Enum):
     GENERIC_ERROR = 0
@@ -214,7 +222,7 @@ class GymPermission(BasePermission):
             # Check permissions for read-only request
             return True
         elif request.method == "POST" and view.action == "create":
-            return is_member(request.user)
+            return is_member(request)
         elif request.method == "DELETE":
             gym_id = view.kwargs['pk']
             print("Deleting gym!!!!!!!!!!", gym_id, is_gym_owner(request.user, gym_id))
@@ -238,7 +246,7 @@ class GymClassPermission(BasePermission):
             return is_gym_owner(
                 request.user,
                 request.data.get("gym")
-            ) and is_member(request.user)
+            ) and is_member(request)
         elif request.method == "DELETE":
             gym_class_id = view.kwargs['pk']
             return is_gym_class_owner(request.user, GymClasses.objects.get(id=gym_class_id))
@@ -263,7 +271,7 @@ class CoachPermission(BasePermission):
             user = request.user
             gym_class: GymClasses = GymClasses.objects.get(id=gym_class_id)
             owner_id = gym_class.gym.owner_id
-            return str(owner_id) == str(user.id) and is_member(request.user)
+            return str(owner_id) == str(user.id) and is_member(request)
         elif request.method == "DELETE":
             if not request.resolver_match.url_name == 'coaches-remove':
                 return False
@@ -291,7 +299,7 @@ class MemberPermission(BasePermission):
                 return Response(to_err("Error finding gym_class id"))
 
             gym_class: GymClasses = GymClasses.objects.get(id=gym_class_id)
-            return (is_gym_owner(request.user, gym_class.gym.id) or is_gymclass_coach(request.user, gym_class)) and is_member(request.user)
+            return (is_gym_owner(request.user, gym_class.gym.id) or is_gymclass_coach(request.user, gym_class)) and is_member(request)
         elif request.method == "DELETE":
             if not request.resolver_match.url_name == 'classmembers-remove':
                 return False
@@ -369,8 +377,8 @@ def check_users_workouts_and_completed_today(request):
     user = request.user
     tz = request.tz
     # today = datetime.now( pytz.timezone(tz)).date()
-
-    today = timezone.now().date()
+    # today = timezone.now().date()
+    today = today_UTC(request)
 
     workoutGroups = WorkoutGroups.objects.filter(
         owner_id=user.id,
@@ -409,7 +417,7 @@ class WorkoutGroupsPermission(BasePermission):
                     - Workouts for users can only be created once per day including Completed Workouts
             '''
 
-            user_is_member = is_member(request.user)
+            user_is_member = is_member(request)
 
             if jbool(request.data.get("owned_by_class")):
                 # Verify user is owner or coach of class and is a member
@@ -553,7 +561,7 @@ class CompletedWorkoutGroupsPermission(BasePermission):
             return True
         elif request.method == "POST" and view.action == "create":
             # API will create the CompletedWorkoutGroup for the requesting user.
-            if is_member(request.user):
+            if is_member(request):
                 print("Completed perms: is member")
                 return True
             else:
@@ -1201,6 +1209,28 @@ class WorkoutGroupsViewSet(viewsets.ModelViewSet, WorkoutGroupsPermission):
             print("\n\n\n\n\nWorkoutGroupsViewSet user_workouts", e)
             print("Request", request)
             return Response({'error': "Failed get user's workout group."}, status=500)
+    @ action(detail=False, methods=['get'], permission_classes=[SelfActionPermission])
+    def last_x_workout_groups(self, request, pk=None):
+        # try:
+        owner_id = request.user.id
+        # workout_groups: WorkoutGroups = WorkoutGroups.objects.filter(
+        #     owner_id=owner_id, owned_by_class=False, for_date__lt=today_UTC(request))
+
+
+        workout_groups = (
+            WorkoutGroups.objects
+            .filter(owner_id=owner_id, owned_by_class=False, for_date__lt=today_UTC(request))
+            .order_by('-for_date')[:10]
+        )
+        # .order_by('-for_date')[:10]
+
+        return Response(WorkoutGroupsSerializer(workout_groups, many=True, context={'request': request, }).data)
+        # except Exception as e:
+        #     print("\n\n\n\n\nWorkoutGroupsViewSet user_workouts", e)
+        #     print("Request", request)
+        #     return Response({'error': "Failed get user's workout group."}, status=500)
+
+
 
     @ action(detail=True, methods=['get'], permission_classes=[])
     def class_workouts(self, request, pk=None):
@@ -1453,6 +1483,7 @@ class WorkoutItemsViewSet(viewsets.ModelViewSet,  WorkoutItemsPermission ):
     def update_items(self, request, pk=None):
         try:
             workout_id = request.data.get("workout", 0)
+            print("Updating items fpr workout ID: ", workout_id)
             with transaction.atomic():
                 WorkoutItems.objects.filter(workout__id=workout_id).delete()
                 return self.create_items(request)
@@ -1563,7 +1594,10 @@ class WorkoutDualItemsViewSet(viewsets.ModelViewSet,  WorkoutItemsPermission ):
                 items.append(WorkoutDualItems(
                     **{**w, "workout": Workouts(id=workout_id), "name": WorkoutNames(id=w['name']['id'])}))
 
-            wStats = WorkoutStats.objects.create(workout_id=workout.id, items=names, tags=tags)
+            wStats, mewly_created = WorkoutStats.objects.get_or_create(workout_id=workout.id)
+            wStats.tags = tags
+            wStats.items = names
+            wStats.save()
             print("Created stats: ", wStats)
 
             return Response(WorkoutDualItemSerializer(WorkoutDualItems.objects.bulk_create(items), many=True).data)
@@ -2340,15 +2374,25 @@ class AIViewSet(viewsets.ViewSet):
         quota, newly_created = TokenQuota.objects.get_or_create(user_id=request.user.id)
         prompt = request.data.get('prompt') # Goal
         scheme_type_text = request.data.get('scheme_type_text')
+        userMaxes = request.data.get('userMaxes')
+        lastWorkoutGroups = request.data.get('lastWorkoutGroups')
+        remaining = quota.remaining_tokens
+
         if not prompt:
             return Response({"error": ' No prompt given'})
 
+        if remaining <= 0:
+            return Response({"error": 'Out of tokens'})
 
-        remaining = quota.remaining_tokens
+
+
 
         messages=[
             {"role": "system", "content": "You are a helpful super awesome Sports Strength and Conditioning Coach, your athlete needs a tailored workout plan that will map to their workout app so only structure output in json."},
-            {"role": "user", "content": f"User Goal: {prompt} --- Workout Scheme Style: {scheme_type_text}"},
+            {"role": "user", "content": f"Workout maxes: {userMaxes}"},
+            {"role": "user", "content": f"MyLast Couple of Workouts: {lastWorkoutGroups}"},
+            {"role": "user", "content": f"Workout Scheme Style: {scheme_type_text}"},
+            {"role": "user", "content": f"User Goal: {prompt}"},
         ]
 
 
@@ -2359,33 +2403,33 @@ class AIViewSet(viewsets.ViewSet):
         print("Input token: ", input_tokens)
         max_output_tokens = remaining - input_tokens
 
+        if max_output_tokens <= 1500:
+            quota.remaining_tokens = 0
+            quota.save()
+            return Response({"error": 'Not enough tokens left'})
+
         response = client.chat.completions.create(
             model="gpt-4o-mini",  # or "gpt-4" if you have access
             # model="gpt-3.5-turbo",  # or "gpt-4" if you have access
             temperature=0.7,
             messages=messages,
-            max_tokens=min(4096 - input_tokens, max_output_tokens - input_tokens),
+            max_tokens=min(16_384, max_output_tokens),
             tools=tools,
             tool_choice="auto",
         )
 
-        output_tokens = response.usage.completion_tokens
-        input_tokens = response.usage.prompt_tokens
+        input_tokens_used = response.usage.prompt_tokens
+        output_tokens_used = response.usage.completion_tokens
         total_tokens = response.usage.total_tokens
-        # total_used = input_tokens + output_tokens
+
 
         quota.use_tokens(total_tokens)
-        # update tokens
-        print("Tokens used: ", total_tokens)
-
-        # message = response.choices[0].message.content.strip()
-
+        print(f"Tokens used this request: {input_tokens_used} ({input_tokens}) + {output_tokens_used} = {total_tokens} ")
+        print(f"Token Usage: {quota.remaining_tokens}/1,750,000")
 
         tool_call = response.choices[0].message.tool_calls[0]
         arguments = json.loads(tool_call.function.arguments)
         print(f"{arguments=}")
-
-
         return Response({'data': arguments})
 
 class ProfileViewSet(viewsets.ViewSet):
@@ -2685,8 +2729,8 @@ class SnapshotViewSet(viewsets.ViewSet):
         # End                   2023-10-09 23:59:59-07
 
         data = dict()
-        today = datetime.now(pytz.timezone(request.tz)).date()
-        today = replace_tz_with_UTC(today, request.tz)
+        today = today_UTC(request)
+
         start = datetime.combine(today, time.min).strftime("%Y-%m-%d %H:%M:%S%z")
         end = datetime.combine(today, time.max).strftime("%Y-%m-%d %H:%M:%S%z")
         print("Daily snapshot date: ", today)

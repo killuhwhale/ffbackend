@@ -1,0 +1,64 @@
+{
+    "name": "generate_workout_items",
+    "description": "Generate a list of workout items for a custom workout plan. All workout name must be chosen from the items description given. All keys must be present with default values. For non-Standard workouts (REPS, ROUNDS, CREATIVE), the 'sets' key is not applicable and should be left at its default value. When creating REPS or ROUNDS workouts, we should be careful not to duplicate items with their reps. The sheme will encapsulate the reps and set. Workouts like Diane, a REP scheme based workout, 21 15 9 should only have 2 items with 1 rep. This means each item should be done 3 times, 21, then 15 then 9. The same goes for ROUNDS, the scheme represents the number of sets. You are a smart trainer and assign proper times and distances for exercises that are duration or distance based like static holding exercises or distance oriented exercises like running, sprinting. Sometimes you can pick one or the other depending on what you thing is best for the workout. You can say run for 1 min or for 400 meters but you cannot say Plank for 400 meters. IT also doesnt makes sense to lift weights for distance or duration",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "goal": {
+          "type": "string",
+          "description": "User's workout goal, e.g. 'build glutes and quads', 'increase endurance', etc."
+        },
+        "workout_type": {
+          "type": "string",
+          "enum": ["STANDARD", "REPS", "ROUNDS", "CREATIVE"],
+          "description": "Workout style. STANDARD workouts use sets while REPS, ROUNDS, and CREATIVE do not.  Standard workouts have the ability to indicate supersets if each item has the same SSID key, that means it should be done as as superset. For REPS type, the scheme_rounds dictate the sets and reps so most items will have 1 rep, do not duplicate exercises/ workout items. Also, there is a constant field to indicate which items should ignore the scheme_rounds for the rep portion. E.g a 10 8 6 would be 3 rounds, if an item was 30sec of plank, we would mark it constant to say, do 1 bout of 30 seconds per round. if we want them to do 10 push ups we say 1 rep, they do 10 push ups and then 8 and then 6."
+        },
+        "scheme_rounds": {
+          "type": "string",
+          "description": "The rep or round scheme as a space-separated list (e.g., '21 15 9') or number of rounds (e.g., '5'). Used only in REPS and ROUNDS types. REPS workouts scheme type dictates the number of sets and reps, so most workout items created for this should just have 1 rep unless that item should be done multiple time per 1 rep of other workouts. Also, we only need 1 item for each exercise, not multiple since we already encapuslate reps and set with the scheme rounds. For ROUNDS, it is a workoud typically do be done for time, as fast as possible, the scheme type dictates the number of rounds, so we still have 1 item per workout for each unique exercise but we need a real # of reps for each item. These can all be weighted. ROUNDS should either have 1 weight per item if the weight doesnt cahnge throughout the workout or it needs a psace-delmited list of weights that match the number of rounds. For CREATIVE workouts, we can use this as a field for giving the user instructions about the workout of how to perform it and any penalties fpr the workout, this field should be returned as scheme_rounds as well.."
+        },
+
+        "items": {
+          "type": "array",
+          "description": "If a workout item has a time/duration or distance element to it, it doesnt not get a value in the reps. It gets either distance/duration value and set the corresponding unit: duration_unit/ distance_unit 0==kg, 1==lbs. A item reps field should never get '30 seconds', that should be duration:30, duration_unit:0 The same goes for distance. If an item gets distance or duration value, then the reps field needs to be 0, this will ruin the app",
+          "items": {
+            "type": "object",
+            "properties": {
+              "constant": {"type": "boolean", "default": false, "description": "Whether the same quantity applies each round."},
+              "date": {"type": "string", "default": "", "description": "Workout item creation date."},
+              "distance": {"type": "string", "default": "0", "description": "Distance value if applicable."},
+              "distance_unit": {"type": "integer", "default": 0, "description": "0 = meters, 1 = yards."},
+              "duration": {"type": "string", "default": "0", "description": "Duration value if applicable."},
+              "duration_unit": {"type": "integer", "default": 0, "description": "0 = seconds, 1 = minutes."},
+              "id": {"type": "integer", "default": 0, "description": "Identifier for the workout item."},
+              "name": {
+                "type": ["object", "string"],
+                "description": "Workout name and details. If available, include a detailed object structure; otherwise, a string. These are the items you can choose from (exact name matters, dont change plurality, case or format like dash or hyphen: Air Squat, Assault Bike, Atlas Stone Lift, Back Extension, Back Take From Turtle Drill, Bar Hang, Bar Muscle Up, Battle Ropes Slams, Battle Ropes Waves, BB Curl, BB Lunge, BB Row, Bear Complex, Bear Crawl, Behind the Neck Press, Bench Press, Block Snatch, Box Jump Over, Box Jumps, Box Squat, Broad Jump, Bulgarian Split Squat, Bulgarian Split Squat, Burpee Box Jump Over, Burpees, Butterfly Guard Drill, Butterfly Pull‑Up, Cable Crunch, Cable Face Pull, Cable Front Raise, Cable Lateral Raise, Cable Overhead Tricep Extension, Cable Pull-Through, Cable SkiErg, Cable Upright Row, Calf Raises, Chain Wrestling Drill, Chest Supported Rows, Chest‑to‑Bar Pull‑Up, Chin-Up, Clean, Clean and Jerk, Close-Grip Bench Press, Collar Tie Drill, Collateral Tie Drill, Crab Walk, Crossface Drill, Crunch, Cuban Press, Cycling, DB Bent Over Row, DB Chest Fly, DB Chest Press, DB Curl, DB Decline Chest Press, DB Front Raise, DB Lateral Raise, DB Lunge, DB Pullover, DB Rear Delt Row, DB Reverse Fly, DB Romanian Deadlift, DB Row, DB Shoulder Press, DB Shrug, DB Upright Row, DB Zottman Curl, Deadbugs, Deadlift, Decline Bench Press, Decline Push-Up, Deficit Deadlift, Devil Press, Dips, Double Unders, Double‑Leg Takedown, Double‑Under, Duck Under Drill, Elliptical, Farmers Walk, Fireman’s Carry, Front Squat, Glute Bridge, Glute-Ham Raise, Goblet Squat, Good Morning, Granby Roll, Guard Retention Drill, Hack Squat, Hammer Curl, Hamstring Curl, Hand Release Push‑Up, Handstand Push Up, Handstand Walk, Hang Clean, Hang Power Clean, Hang Power Snatch, Hang Snatch, Hanging Leg Raises, Heel Touch, High‑Crotch Takedown, Hill Sprints, Hip Abduction, Hip Adduction, Hip Escape, Hip Thrust, Incline Bench Press, Incline Dumbbell Press, Incline Push-Up, Jefferson Deadlift, Jogging, JuiJitsu, Kettlebell Clean and Press, Kettlebell Front Squat, Kettlebell Overhead Squat, Kettlebell Swing, Kipping Pull‑Up, Knee Slice Pass Drill, Landmine, Landmine Press, Landmine Row, Landmine Squat, Leg Curl, Leg Extension, Leg Press, Leg Raise, Low Single‑Leg Takedown, Lunge, Machine Shoulder Press, Man Maker, Med Ball Side Toss, Med Ball Slam, Mountain Climbers, Neck Harness Extension, Overhead Squat, Overhead Walking Lunge, Overhook Pummel Drill, Paused Deadlift, Paused Squat, Pendlay Row, Penetration Step Drill, Pistol Squat, Plank, Power Clean, Power Jerk, Power Snatch, Preacher Curl, Pull Up, Push Press, Push-Up, Reverse Flyes, Reverse Grip Bench Press, Reverse Hyper Ext, Reverse Lunge, Ring Handstand Push Up, Ring Muscle Up, Rolling Sesh, Romanian Deadlift, Rope Climbing, Rowing, Running, Sandbag Clean and Press, Sandbag Shoulder to Overhead, Seated Calf Raise, Shadow Grappling, Shoulder Press, Side Plank, Single-Arm Landmine Press, Single-Leg Glute Bridge, Single-Leg Romanian Deadlift, Single‑Arm Dumbbell Snatch, Single‑Leg Takedown, Sit-Up, Sit‑Out Drill, Sled Pull, Sled Push, Sledgehammer Slams, Smith Machine Bench Press, Smith Machine Calf Raise, Smith Machine Hack Squat, Smith Machine Row, Smith Machine Shoulder Press, Smith Machine Squat, Snap Down to Front Headlock, Snatch, Snatch Grip Behind the Neck Press, Snatch Grip Deadlift, Spinning Single‑Leg Takedown, Split Jerk, Sprawl and Brawl, Sprawls, Sprint, Squat, Squat Jerk, Stairs, Standing Calf Raise, Step Up, Suitcase Carry, Suitcase Deadlift, Sumo Deadlift, T-Bar Row, Technical Stand-Up, Thruster, Toes-to-Bar, Trap Bar Deadlift, Tricep Extension, TRX Chest Press, TRX Row, Turkish Get‑Up, Underhook Pummel Drill, Walking, Wall Balls, Wall Handstand, Wall Sit, Wall Walk, Windshield Wiper, Wrestler’s Bridge, Yoke Carry, Zercher Squat",
+                "default": ""
+              },
+              "order": {"type": "integer", "default": -1, "description": "Order position in the workout."},
+              "pause_duration": {"type": "integer", "default": 0, "description": "Pause duration between exercises."},
+              "penalty": {"type": "string", "default": "", "description": "Penalty description if any."},
+              "percent_of": {"type": "string", "default": "", "description": "Percent of weight or rep value, if applicable."},
+              "reps": {"type": "string", "default": "1", "description": "In a REPS scheme, typically '1' (unless a multiplier is needed); otherwise, represents the number of repetitions per set."},
+              "rest_duration": {"type": "integer", "default": 0, "description": "Rest duration between sets."},
+              "rest_duration_unit": {"type": "integer", "default": 0, "description": "0 = seconds, 1 = minutes."},
+              "sets": {"type": "integer", "default": 1, "description": "Only used in STANDARD workouts. For REPS/ROUNDS, keep at default."},
+              "ssid": {"type": "integer", "default": -1, "description": "Secondary identifier if needed."},
+              "uuid": {"type": "string", "default": "", "description": "Unique identifier for the workout item."},
+              "weight_unit": {
+                "type": "string",
+                "enum": ["kg", "lb", "%"],
+                "default": "lb",
+                "description": "Unit for weight."
+              },
+              "weights": {"type": "string", "default": "", "description": "Space-separated list of weights corresponding to rounds or sets. Weights should not have brackets at this stage, do not include [ or ]"},
+              "workout": {"type": "integer", "default": 0, "description": "Identifier for the workout."}
+            },
+            "required": ["name", "reps", "weights", "weight_unit", "order"]
+          }
+        }
+      },
+      "required": ["goal", "workout_type", "scheme_rounds"]
+    }
+  }

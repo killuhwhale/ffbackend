@@ -322,10 +322,10 @@ class CombinedWorkoutGroupsSerializerNoWorkouts(serializers.Serializer):
     def get_created_workout_groups(self, instance):
         print("Instance: ", instance)
         print("Context: ", self.context)
-        cwgs = instance['created_workout_groups'].order_by('-for_date')
-        print("This should be sorted by for_date", cwgs)
+        wgs = instance['created_workout_groups'].order_by('-for_date')
+        print("This should be sorted by for_date", wgs)
 
-        return WorkoutGroupsAutoCompletedSerializer(cwgs, context=self.context,
+        return WorkoutGroupsAutoCompletedSerializer(wgs, context=self.context,
                                                     many=True, required=False).data
 
     def get_completed_workout_groups(self, instance):
@@ -443,7 +443,8 @@ class WorkoutNameMaxSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = WorkoutNames
-        fields = ['id', 'name', 'current_max', ]
+        fields = ['id', 'name', 'current_max', 'primary', 'secondary' ]
+        depth = 2
 
     def get_current_max(self, obj):
         """Get the current max for this workout item and the current user"""

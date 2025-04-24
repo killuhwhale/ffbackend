@@ -67,6 +67,8 @@ class WorkoutGroups(models.Model):
         max_length=100, blank=False, null=False)  # Class ID or USER ID
     owned_by_class = models.BooleanField(default=True)
     # Allows Workouts to be added to Group when false
+    template_name = models.CharField(max_length=20, default="") # filter from templates
+    is_template = models.BooleanField(default=False)
     finished = models.BooleanField(default=False)
     for_date = models.DateTimeField()  # Date the Workout is intended for
     title = models.CharField(max_length=50, blank=False, null=False)
@@ -75,10 +77,10 @@ class WorkoutGroups(models.Model):
     date = models.DateTimeField(auto_now_add=True)
     archived = models.BooleanField(default=False)
     date_archived = models.DateTimeField(blank=True, null=True)
-    # -- Todo restrict by day, time doesnt matter.... target_date -> day the wor
+
 
     class Meta:
-        unique_together = [["owner_id", "owned_by_class", "title"]]
+        unique_together = [["owner_id", "owned_by_class", "title", "for_date"]]
         indexes = [
             GinIndex(fields=['title'], name='workoutgroup_title_trgm', opclasses=['gin_trgm_ops']),
         ]
@@ -99,43 +101,6 @@ class Workouts(models.Model):
         unique_together = [['group', 'title']]
 
 
-class TokenQuota(models.Model):
-    user_id = models.CharField(max_length=100, blank=False, null=False, unique=True)
-    remaining_tokens = models.PositiveIntegerField(default=1_000_000)
-    reset_at = models.DateTimeField(default=timezone.now)
-
-    def reset_if_expired(self):
-        if timezone.now() >= self.reset_at:
-            self.remaining_tokens = 1_750_000
-            self.reset_at = timezone.now() + timedelta(days=30)
-            self.save()
-
-    def use_tokens(self, amount: int) -> bool:
-        self.reset_if_expired()
-        if self.remaining_tokens < amount:
-            return False
-        self.remaining_tokens -= amount
-        self.save()
-        return True
-
-    def __str__(self):
-        return f"{self.user_id}: {self.remaining_tokens} tokens (resets {self.reset_at})"
-
-
-
-class WorkoutStats(models.Model):
-    workout = models.OneToOneField(
-        Workouts,  # ensure you reference your Workouts model appropriately
-        on_delete=models.CASCADE,
-        related_name='stats'
-    )
-    # JSONField for storing tags (e.g., "Core", "Running", "Squat")
-    tags = models.JSONField(default=dict)
-    # JSONField for storing per-exercise calculated statistics
-    items = models.JSONField(default=dict)
-
-    def __str__(self):
-        return f"Stats for Workout {self.workout.id}"
 
 class WorkoutCategories(models.Model):
     title = models.CharField(max_length=100, unique=True)
@@ -322,6 +287,43 @@ class CompletedWorkoutDualItems(models.Model):
     r_percent_of = models.CharField(max_length=20, default='')
 
 
+class TokenQuota(models.Model):
+    user_id = models.CharField(max_length=100, blank=False, null=False, unique=True)
+    remaining_tokens = models.PositiveIntegerField(default=1_000_000)
+    reset_at = models.DateTimeField(default=timezone.now)
+
+    def reset_if_expired(self):
+        if timezone.now() >= self.reset_at:
+            self.remaining_tokens = 1_750_000
+            self.reset_at = timezone.now() + timedelta(days=30)
+            self.save()
+
+    def use_tokens(self, amount: int) -> bool:
+        self.reset_if_expired()
+        if self.remaining_tokens < amount:
+            return False
+        self.remaining_tokens -= amount
+        self.save()
+        return True
+
+    def __str__(self):
+        return f"{self.user_id}: {self.remaining_tokens} tokens (resets {self.reset_at})"
+
+
+
+class WorkoutStats(models.Model):
+    workout = models.OneToOneField(
+        Workouts,  # ensure you reference your Workouts model appropriately
+        on_delete=models.CASCADE,
+        related_name='stats'
+    )
+    # JSONField for storing tags (e.g., "Core", "Running", "Squat")
+    tags = models.JSONField(default=dict)
+    # JSONField for storing per-exercise calculated statistics
+    items = models.JSONField(default=dict)
+
+    def __str__(self):
+        return f"Stats for Workout {self.workout.id}"
 
 
 class LikedWorkouts(models.Model):

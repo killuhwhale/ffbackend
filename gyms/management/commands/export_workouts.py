@@ -34,7 +34,7 @@ class Command(BaseCommand):
                 scheme_text = SCHEME_TYPE_MAP.get(w.scheme_type, "Unknown")
                 prompt = (
                     f"### System:\n"
-                    f"You are a strength coach. Always return a JSON array under the key \"workout\"\n"
+                    f"You are a strength coach. Always return a JSON array of items\n"
                     f"without markdown. Keys: name (string), sets (int), reps (int or [int]), "
                     f"weights (optional [int]), duration (optional int), distance (optional int).\n"
                     f"### User:\n"

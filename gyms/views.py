@@ -18,12 +18,14 @@ from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import BasePermission, SAFE_METHODS
 from rest_framework.response import Response
+from rest_framework.request import Request
+from rest_framework.test import APIRequestFactory, force_authenticate
 from typing import Any, Dict, List
 import environ
 import json
 import pytz
 import openai
-
+import json
 import tiktoken
 
 from openai import OpenAI
@@ -41,7 +43,7 @@ from gyms.serializers import (
     WorkoutItemCreateSerializer, CoachesCreateSerializer, ClassMembersCreateSerializer,
     GymClassFavoritesSerializer, GymFavoritesSerializer, LikedWorkoutsSerializer, WorkoutGroupsSerializer,
     WorkoutCreateSerializer, ProfileSerializer, WorkoutNameMinimalSerializer, UserWorkoutMaxSerializer,
-    UserWorkoutMaxHistorySerializer, WorkoutNameMaxSerializer,
+    UserWorkoutMaxHistorySerializer, WorkoutNameMaxSerializer,WorkoutGroupsAutoCompletedSerializer
 )
 
 from gyms.models import (TokenQuota,
@@ -1519,8 +1521,13 @@ class WorkoutItemsViewSet(viewsets.ModelViewSet,  WorkoutItemsPermission ):
 
             items = []
             for w in workout_items:
-                del w['id']
-                del w['workout']
+                try:
+                    del w['id']
+                    del w['workout']
+                except Exception as err:
+                    # print("Nothing to delete")
+                    pass
+                print(f"{w=}")
                 items.append(WorkoutItems(
                     **{**w, "workout": Workouts(id=workout_id), "name": WorkoutNames(id=w['name']['id'])}))
             created_workout_items = WorkoutItems.objects.bulk_create(items)
@@ -2087,6 +2094,7 @@ class WorkoutCategoriesViewSet(viewsets.ModelViewSet, SuperUserWritePermission):
     serializer_class = WorkoutCategorySerializer
     permission_classes=[SuperUserWritePermission]
 
+
 class CoachesViewSet(viewsets.ModelViewSet, CoachPermission):
     """
     API endpoint that allows users to be viewed or edited.
@@ -2502,6 +2510,24 @@ class ProfileViewSet(viewsets.ViewSet):
 
 
     @action(detail=False, methods=['GET'], permission_classes=[])
+    def template_workout_groups(self, request, pk=None):
+        user_id = request.user.id
+        template_name = request.query_params.get('template_name')
+
+        # Fetch both workout groups
+        wgs = WorkoutGroups.objects.filter(
+            owner_id=user_id,
+            owned_by_class=False,
+            archived=False,
+            template_name=template_name
+        ).exclude(
+            is_template=False
+        ).order_by('for_date')
+
+        return Response(WorkoutGroupsAutoCompletedSerializer(wgs, many=True, context={'request': request}).data)
+
+
+    @action(detail=False, methods=['GET'], permission_classes=[])
     def workout_groups(self, request, pk=None):
         user_id = request.user.id
         workouts = dict()
@@ -2509,7 +2535,14 @@ class ProfileViewSet(viewsets.ViewSet):
 
         # Fetch both workout groups
         wgs = WorkoutGroups.objects.filter(
-            owner_id=user_id, owned_by_class=False, archived=False).order_by('-for_date')
+            owner_id=user_id,
+            owned_by_class=False,
+            archived=False
+        ).exclude(
+            finished=False,
+            is_template=True
+        ).order_by('-for_date')
+
         cwgs = CompletedWorkoutGroups.objects.filter(
             user_id=user_id).order_by('-for_date')
 
@@ -2529,32 +2562,104 @@ class ProfileViewSet(viewsets.ViewSet):
         # Return the paginated response
         return paginator.get_paginated_response(paginated_combined_data)
 
-        # wgs = WorkoutGroups.objects.filter(
-        #     owner_id=user_id, owned_by_class=False, archived=False).order_by('for_date')
-        # cwgs = CompletedWorkoutGroups.objects.filter(
-        #     user_id=user_id).order_by('for_date')
 
-        # paginator = WorkoutGroupPagination()
+class BulkTemplateViewSet(viewsets.ViewSet):
+    """
+    POST /bulktemplates/
+    {
+      "template": [
+        {
+          "group": { …WorkoutGroupsViewSet.create payload… },
+          "workouts": [
+            {
+              "workout": { …WorkoutsViewSet.create payload… },
+              "items": [ …WorkoutItem objects… ]
+            },
+            …
+          ]
+        },
+        …
+      ]
+    }
+    """
 
-        # created_workout_groups_page = paginator.paginate_queryset(wgs, request)
-        # completed_workout_groups_page = paginator.paginate_queryset(cwgs, request)
+    @action(detail=False, methods=['POST'], permission_classes=[SelfActionPermission])
+    def create_template(self, request):
+        # print("Request template: ", request.data)
+        print("Request template user: ", request.user)
+        factory = APIRequestFactory()
+        created_groups = []
+        user = request.user
+        tz = request.tz
 
 
+        for grp in request.data.get("template", []):
+            # print("Creating group: ", grp)
+            group = {**grp["group"]}  # "is_template": True, "template_name": "5_3_1"
+            # 1) Create group
+            group_req = factory.post(
+                '/workoutGroups/',
+                group,
+                format='multipart'
+            )
 
-        # # data['created_workout_groups'] = wgs
-        # # data['completed_workout_groups'] = cwgs
-        # data['created_workout_groups'] = ProfileWorkoutGroupsSerializer(
-        #     created_workout_groups_page, many=True, context={'request': request}
-        # ).data
+            group_req.tz = tz
+            force_authenticate(group_req, user=user)
+            group_resp = WorkoutGroupsViewSet.as_view({"post": "create"})(group_req)
 
-        # data['completed_workout_groups'] = ProfileWorkoutGroupsSerializer(
-        #     completed_workout_groups_page, many=True, context={'request': request}
-        # ).data
+            print(f"{group_resp.status_code=}")
 
-        # workouts['workout_groups'] = data
 
-        # # return Response()
-        # return paginator.get_paginated_response(ProfileWorkoutGroupsSerializer(workouts,  context={'request': request, }).data)
+            if group_resp.status_code not in (status.HTTP_200_OK, status.HTTP_201_CREATED):
+                return group_resp
+
+            group_id = group_resp.data["id"]
+            created_groups.append(group_id)
+
+            # 2) Create each workout
+            print("Creating workouts for group: ", grp.get("workouts", []))
+            for wk in grp.get("workouts", []):
+                wk_payload = {**wk["workout"], "group": group_id}
+                workout_req = factory.post(
+                    '/workouts/',
+                    wk_payload,
+                    format='multipart'
+                )
+
+                force_authenticate(workout_req, user=user)
+                workout_req.tz = tz
+
+                wk_resp = WorkoutsViewSet.as_view({"post": "create"})(workout_req)
+                if wk_resp.status_code not in (status.HTTP_200_OK, status.HTTP_201_CREATED):
+                    return wk_resp
+
+
+                workout_id = wk_resp.data["id"]
+
+                # 3) Bulk‐create items
+                items_payload = {
+                    "items": json.dumps( wk["items"]),
+                    "workout": workout_id,
+                    "workout_group": group_id,
+                    "tags": json.dumps(wk['tags']),
+                    "names": json.dumps(wk['names']),
+                }
+                items_req = factory.post(
+                    '/workoutItems/items/',
+                    items_payload,
+                    format='multipart'
+                )
+
+                force_authenticate(items_req, user=user)
+                items_req.tz = tz
+                items_resp = WorkoutItemsViewSet.as_view({"post": "items"})(items_req)
+                if items_resp.status_code not in (status.HTTP_200_OK, status.HTTP_201_CREATED):
+                    return items_resp
+
+        return Response(
+            {"created_groups": created_groups},
+            status=status.HTTP_201_CREATED
+        )
 
 
 
@@ -2593,8 +2698,9 @@ class StatsViewSet(viewsets.ViewSet):
             owned_by_class=False,
             owner_id=user_id,
             archived=False,
-            for_date__gte= start,
-            for_date__lte= end,
+            finished=True,
+            for_date__gte=start,
+            for_date__lte=end,
         )
         cwgs = CompletedWorkoutGroups.objects.filter(
             user_id=user_id,

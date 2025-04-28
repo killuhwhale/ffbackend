@@ -204,6 +204,8 @@ class ResetPasswordEmailViewSet(viewsets.ViewSet):
 
     def _get_user(self, email: str):
         try:
+            emails = [ user.email for user in get_user_model().objects.all() ]
+            print("debug emails: ", emails)
             return get_user_model().objects.get(email=email)
         except Exception as e:
             print("Error getting user or creating code.", e)

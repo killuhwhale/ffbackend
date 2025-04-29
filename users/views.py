@@ -362,7 +362,8 @@ class EmailTokenObtainPairView(TokenObtainPairView):
         logger.debug("🔥 Token endpoint hit, payload=", request.data)
         print("🔥 Token endpoint hit, payload= ", request.data['email'])
 
-        serializer = self.get_serializer(data=request.data)
+        # serializer = self.get_serializer(data=request.data)
+        serializer = MyTokenObtainPairSerializer(data=request.data)
         try:
             # this is where it will raise a ValidationError on bad creds
             serializer.is_valid(raise_exception=True)

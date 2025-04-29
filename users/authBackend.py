@@ -7,6 +7,7 @@ User = get_user_model()
 class EmailAuth(BaseBackend):
     def authenticate(self, request, email=None, password=None):
         try:
+            print("My auth: email: " , email)
             user = User.objects.get(email=email)
             if(check_password(password, user.password)):
                 return user

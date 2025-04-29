@@ -24,7 +24,7 @@ from gyms.models import ResetPasswords
 from users.models import ConfirmationEmailCodes
 from users.serializers import (
     UserCreateSerializer, UserSerializer, GroupSerializer,
-    UserWithoutEmailSerializer, TokenObtainPairSerializer
+    UserWithoutEmailSerializer, MyTokenObtainPairSerializer
 )
 env = environ.Env()
 tz = pytz.timezone("US/Pacific")
@@ -356,7 +356,7 @@ class GroupViewSet(viewsets.ModelViewSet):
 
 
 class EmailTokenObtainPairView(TokenObtainPairView):
-    serializer_class = TokenObtainPairSerializer
+    serializer_class = MyTokenObtainPairSerializer
 
     def post(self, request, *args, **kwargs):
         logger.debug("🔥 Token endpoint hit, payload=%r", request.data)

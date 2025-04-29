@@ -352,29 +352,29 @@ class GroupViewSet(viewsets.ModelViewSet):
     permission_classes = [UserGroupsPermission]
 
 
-# class EmailTokenObtainPairView(TokenObtainPairView):
-#     serializer_class = TokenObtainPairSerializer
-
-
 class EmailTokenObtainPairView(TokenObtainPairView):
     serializer_class = MyTokenObtainPairSerializer
 
-    def post(self, request, *args, **kwargs):
-        logger.debug("🔥 Token endpoint hit, payload=", request.data)
-        print("🔥 Token endpoint hit, payload= ", request.data['email'])
 
-        # serializer = self.get_serializer(data=request.data)
-        serializer = MyTokenObtainPairSerializer(data=request.data)
-        try:
-            # this is where it will raise a ValidationError on bad creds
-            serializer.is_valid(raise_exception=True)
-        except Exception as exc:
-            # log the full error detail
-            logger.exception("🚨 TokenObtainPair failed")
-            # re-raise so DRF still returns 401 with detail
-            raise
+# class EmailTokenObtainPairView(TokenObtainPairView):
+#     serializer_class = MyTokenObtainPairSerializer
 
-        # if you get here, it succeeded
-        logger.debug("✅ TokenObtainPair succeeded for user %r", serializer.user)
-        print("✅ TokenObtainPair succeeded for user %r", serializer.user)
-        return Response(serializer.validated_data, status=status.HTTP_200_OK)
+#     def post(self, request, *args, **kwargs):
+#         logger.debug("🔥 Token endpoint hit, payload=", request.data)
+#         print("🔥 Token endpoint hit, payload= ", request.data['email'])
+
+#         # serializer = self.get_serializer(data=request.data)
+#         serializer = MyTokenObtainPairSerializer(data=request.data)
+#         try:
+#             # this is where it will raise a ValidationError on bad creds
+#             serializer.is_valid(raise_exception=True)
+#         except Exception as exc:
+#             # log the full error detail
+#             logger.exception("🚨 TokenObtainPair failed")
+#             # re-raise so DRF still returns 401 with detail
+#             raise
+
+#         # if you get here, it succeeded
+#         logger.debug("✅ TokenObtainPair succeeded for user %r", serializer.user)
+#         print("✅ TokenObtainPair succeeded for user %r", serializer.user)
+#         return Response(serializer.validated_data, status=status.HTTP_200_OK)

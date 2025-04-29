@@ -35,12 +35,12 @@ logger = logging.getLogger(__name__)
 def get_user_timezone(request):
     g = GeoIP2()
     user_ip = request.META.get('REMOTE_ADDR')
-    logger.debug('get_user_timezone', user_ip)
+    print('get_user_timezone', user_ip)
     if user_ip:
         try:
             # Get the user's timezone based on their IP address
             user_timezone = g.city(user_ip)['time_zone']
-            logger.debug(f"user_timezone: {user_timezone=}")
+            print(f"user_timezone: {user_timezone=}")
             return user_timezone
         except:
             pass
@@ -53,14 +53,14 @@ class JWTMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        logger.debug(f"middleware req: {request.method=}, {request.path=} ")
+        print(f"middleware req: {request.method=}, {request.path=} ")
         # Allow requests to endpoints without auth token
         if request.path == "/":
             return JsonResponse({'data': f'Hello world {request.path}'}, status=200)
 
         if request.path in ['/hooks/revenuecat/', '/hooks/webhook/', '/login/', '/register/', '/token/', '/token/refresh/', '/users/', '/user/send_reset_code/', '/user/reset_password/', '/emailvalidation/confirm_email/', '/emailvalidation/send_confirmation_email']:
             if request.path == "/users/" and not request.method == "POST":
-                logger.debug(f"Needs access token  for this users request, only post is bypassed... {request.method=}",)
+                print(f"Needs access token  for this users request, only post is bypassed... {request.method=}",)
                 # return JsonResponse({'error': f'Invalid access token, route not permitted '}, status=401)
             elif request.path == "/hooks/revenuecat/":
                 if request.META.get('HTTP_AUTHORIZATION') == env("REVENUECAT_TOKEN"):
@@ -70,7 +70,7 @@ class JWTMiddleware:
                 else:
                     return JsonResponse({'error': 'Invalid access token'}, status=401)
             else:
-                logger.debug("No access token needed... ")
+                print("No access token needed... ")
                 response = self.get_response(request)
                 return response
 
@@ -99,7 +99,7 @@ class TzMiddleware:
     def __call__(self, request):
         # logger.critical(f"middleware req: {request=} {request.method=}, {request.path=} ")
         tz = get_user_timezone(request)
-        logger.debug(f"TZMiddleware: {tz=}", )
+        print(f"TZMiddleware: {tz=}", )
         if tz is not None:
             request.tz = tz
 

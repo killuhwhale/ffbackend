@@ -9,6 +9,9 @@ class EmailAuth(BaseBackend):
         try:
             print("My auth: email: " , email)
             user = User.objects.get(email=email)
+            print("My auth: user: " , user)
+            print("My auth: passowrd: " , password, user.password)
+
             if(check_password(password, user.password)):
                 return user
         except Exception as e:

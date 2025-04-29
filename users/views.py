@@ -360,6 +360,7 @@ class EmailTokenObtainPairView(TokenObtainPairView):
 
     def post(self, request, *args, **kwargs):
         logger.debug("🔥 Token endpoint hit, payload=%r", request.data)
+        print("🔥 Token endpoint hit, payload=%r", request.data)
 
         serializer = self.get_serializer(data=request.data)
         try:
@@ -373,4 +374,5 @@ class EmailTokenObtainPairView(TokenObtainPairView):
 
         # if you get here, it succeeded
         logger.debug("✅ TokenObtainPair succeeded for user %r", serializer.user)
+        print("✅ TokenObtainPair succeeded for user %r", serializer.user)
         return Response(serializer.validated_data, status=status.HTTP_200_OK)

@@ -272,6 +272,7 @@ class ResetPasswordEmailViewSet(viewsets.ViewSet):
     def send_reset_code(self, request, pk=None):
         '''  '''
         email = request.data.get("email")
+        print("send_reset_code request.data: ", request.data)
         user = self._get_user(email)
 
         if user is None:

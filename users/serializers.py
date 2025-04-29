@@ -5,7 +5,7 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 
 class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
-    username_field = get_user_model().EMAIL_FIELD
+    username_field = get_user_model().USERNAME_FIELD
 
 
 class UserCreateSerializer(serializers.HyperlinkedModelSerializer):

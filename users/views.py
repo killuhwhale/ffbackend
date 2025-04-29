@@ -359,18 +359,18 @@ class EmailTokenObtainPairView(TokenObtainPairView):
     serializer_class = MyTokenObtainPairSerializer
 
     def post(self, request, *args, **kwargs):
-        logger.debug("🔥 Token endpoint hit, payload=%r", request.data)
-        print("🔥 Token endpoint hit, payload=%r", request.data)
+        logger.debug("🔥 Token endpoint hit, payload=", request.data)
+        print("🔥 Token endpoint hit, payload= ", request.data['email'])
 
         serializer = self.get_serializer(data=request.data)
-        # try:
-        #     # this is where it will raise a ValidationError on bad creds
-        #     serializer.is_valid(raise_exception=True)
-        # except Exception as exc:
-        #     # log the full error detail
-        #     logger.exception("🚨 TokenObtainPair failed")
-        #     # re-raise so DRF still returns 401 with detail
-        #     raise
+        try:
+            # this is where it will raise a ValidationError on bad creds
+            serializer.is_valid(raise_exception=True)
+        except Exception as exc:
+            # log the full error detail
+            logger.exception("🚨 TokenObtainPair failed")
+            # re-raise so DRF still returns 401 with detail
+            raise
 
         # if you get here, it succeeded
         logger.debug("✅ TokenObtainPair succeeded for user %r", serializer.user)

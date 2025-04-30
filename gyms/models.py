@@ -68,6 +68,8 @@ class WorkoutGroups(models.Model):
     owned_by_class = models.BooleanField(default=True)
     # Allows Workouts to be added to Group when false
     template_name = models.CharField(max_length=20, default="") # filter from templates
+    template_num = models.SmallIntegerField(default=0)
+    template_finished = models.BooleanField(default=False) # When a group is a part of a template this determines if the user is done with it. Either autoamtically via finishing all workouts or the user manually "resetting" the template. This means some workouts can be finished=False and template_finished=True
     is_template = models.BooleanField(default=False)
     finished = models.BooleanField(default=False)
     for_date = models.DateTimeField()  # Date the Workout is intended for

@@ -613,7 +613,11 @@ class UserMaxesPermission(BasePermission):
         return target_user_id == str(request.user.id)
 
 class SelfActionPermission(BasePermission):
-    message = """Only users can perform actions for themselves."""
+    message = """
+        Only users can perform actions for themselves.
+            GET => ?user_id=id
+            POST => { user_id: id }
+    """
 
     def has_permission(self, request, view):
 
@@ -1013,6 +1017,21 @@ class GymClassViewSet(DestroyWithPayloadMixin, viewsets.ModelViewSet, GymClassPe
 ########################################################
 
 
+
+def has_unfinished_workoutgroups(workout_group):
+    # This is a workoutGroup that is a part of the template
+    template_name = workout_group.template_name
+    template_num = workout_group.template_num
+    has_unfinished_workoutgroups_in_template = WorkoutGroups.objects.filter(
+            owner_id=workout_group.owner_id,
+            template_name=template_name,
+            template_num=template_num,
+            finished=False
+        ).exclude(id=workout_group.id).exists()
+
+    return has_unfinished_workoutgroups_in_template
+
+
 class WorkoutGroupsViewSet(viewsets.ModelViewSet, WorkoutGroupsPermission):
     """
     API endpoint that allows users to be viewed or edited.
@@ -1272,6 +1291,50 @@ class WorkoutGroupsViewSet(viewsets.ModelViewSet, WorkoutGroupsPermission):
         except Exception as e:
             return Response(to_err("Failed to unfavorite"))
 
+
+    @ action(detail=False, methods=['POST'], permission_classes=[SelfActionPermission])
+    def update_title(self, request, pk=None):
+        wid = request.data['id']
+        updated_title = request.data['title']
+
+        if updated_title:
+            grp = WorkoutGroups.objects.get(id=wid)
+            if grp:
+                print("Updating title to: ", updated_title)
+                grp.title = updated_title
+                grp.save()
+                return Response({"data": 'successfully updated title'})
+        return Response({"err": 'Failed to update title'})
+
+    @ action(detail=False, methods=['POST'], permission_classes=[SelfActionPermission])
+    def update_caption(self, request, pk=None):
+        wid = request.data['id']
+        updated_caption = request.data['caption']
+
+        if updated_caption:
+            grp = WorkoutGroups.objects.get(id=wid)
+            if grp:
+                print("Updating caption to: ", updated_caption)
+                grp.caption = updated_caption
+                grp.save()
+                return Response({"data": 'successfully updated caption'})
+        return Response({"err": 'Failed to update caption'})
+
+    @ action(detail=False, methods=['POST'], permission_classes=[SelfActionPermission])
+    def update_for_date(self, request, pk=None):
+        wid = request.data['id']
+        updated_for_date = request.data['for_date']
+
+        if updated_for_date:
+            grp = WorkoutGroups.objects.get(id=wid)
+            if grp:
+                print("Updating for date to: ", updated_for_date)
+                grp.for_date = updated_for_date
+                grp.save()
+                return Response({"data": 'successfully updated for date'})
+        return Response({"err": 'Failed to update for date'})
+
+
     @ action(detail=False, methods=['POST'], permission_classes=[])
     def finish(self, request, pk=None):
         try:
@@ -1302,6 +1365,10 @@ class WorkoutGroupsViewSet(viewsets.ModelViewSet, WorkoutGroupsPermission):
                 return Response({"error": "User is not owner"})
 
             workout_group.finished = True
+            # TODO Also if the user is finishing a template workout, we need
+            #     to also check if they completed all the workouts in this template/ temaplte_num
+            if workout_group.is_template:
+                workout_group.template_finished = True
             workout_group.save()
 
             return Response(WorkoutGroupsSerializer(workout_group, context={'request': request}).data)
@@ -2375,6 +2442,16 @@ def count_message_tokens(messages: list, model="gpt-3.5-turbo") -> int:
     tokens += 2  # for assistant priming
     return tokens + 2 ## Good measure
 
+def next_template_num(user, template_name):
+    # Grab the next latest template number, default is 0, first one created will be 1
+    latest_wg_by_template = WorkoutGroups.objects.filter(owner_id=user.id, template_name=template_name).order_by("-template_num").first()
+    return latest_wg_by_template.template_num + 1 if latest_wg_by_template else 1
+
+def cur_template_num(user, template_name):
+    # First one created will have 1 or larger
+    latest_wg_by_template = WorkoutGroups.objects.filter(owner_id=user.id, template_name=template_name).order_by("-template_num").first()
+    return latest_wg_by_template.template_num if latest_wg_by_template else 0
+
 class AIViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['POST'], permission_classes=[SelfActionPermission])
     def create_workout(self, request, pk=None):
@@ -2513,16 +2590,26 @@ class ProfileViewSet(viewsets.ViewSet):
     def template_workout_groups(self, request, pk=None):
         user_id = request.user.id
         template_name = request.query_params.get('template_name')
-
+        template_num = cur_template_num(request.user, template_name)
+        print("Getting template groups for num: ", template_num)
         # Fetch both workout groups
         wgs = WorkoutGroups.objects.filter(
             owner_id=user_id,
             owned_by_class=False,
-            archived=False,
-            template_name=template_name
+            archived=False,  # This essentially means deleted, deleted=False
+            template_name=template_name,
+            template_num=template_num,
         ).exclude(
             is_template=False
         ).order_by('for_date')
+
+        # IF excluding all finished results in no items, so be it, we are done...
+        unfinished_groups = wgs.exclude(template_finished=True)
+        num_unfinished_groups = len(wgs.exclude(template_finished=True))
+
+        if num_unfinished_groups == 0:
+            return Response(WorkoutGroupsAutoCompletedSerializer(unfinished_groups, many=True, context={'request': request}).data)
+
 
         return Response(WorkoutGroupsAutoCompletedSerializer(wgs, many=True, context={'request': request}).data)
 
@@ -2558,7 +2645,7 @@ class ProfileViewSet(viewsets.ViewSet):
         # Paginate the combined result
         paginator = WorkoutGroupPagination()
         paginated_combined_data = paginator.paginate_queryset(combined_data['created_workout_groups'] + combined_data['completed_workout_groups'], request)
-        print(f"Paginated data: ", paginated_combined_data)
+        # print(f"Paginated data: ", paginated_combined_data)
         # Return the paginated response
         return paginator.get_paginated_response(paginated_combined_data)
 
@@ -2584,6 +2671,35 @@ class BulkTemplateViewSet(viewsets.ViewSet):
     """
 
     @action(detail=False, methods=['POST'], permission_classes=[SelfActionPermission])
+    def reset_template(self, request):
+        '''  To reset a template  is to simply delete the workoutGroups that werent marked finished. We can ust remove these   '''
+        try:
+            user = request.user
+            template_name = request.data['template_name']
+
+
+
+            template_wg = WorkoutGroups.objects.filter(
+                is_template=True,
+                owner_id=user.id,
+                template_name=template_name,
+                finished=False,
+                template_num = cur_template_num(user, template_name)
+            )
+
+
+            for w in template_wg:
+                w.delete()
+            return Response({"data": "Successfully removed un-done/finished templates"})
+        except Exception as err:
+            print("Failed to reset template: ", request.data, err)
+        return Response({"err": "Failed to reset template"})
+
+
+
+
+
+    @action(detail=False, methods=['POST'], permission_classes=[SelfActionPermission])
     def create_template(self, request):
         # print("Request template: ", request.data)
         print("Request template user: ", request.user)
@@ -2593,10 +2709,18 @@ class BulkTemplateViewSet(viewsets.ViewSet):
         tz = request.tz
 
 
-        for grp in request.data.get("template", []):
+        groups = request.data.get("template", [])
+        if len(groups) < 1:
+            return Response([])
+
+        template_name = groups[0]["group"]['template_name']
+        template_num = next_template_num(request.user, template_name)
+        for grp in groups:
             # print("Creating group: ", grp)
             group = {**grp["group"]}  # "is_template": True, "template_name": "5_3_1"
-            # 1) Create group
+
+            group['template_num'] = template_num
+
             group_req = factory.post(
                 '/workoutGroups/',
                 group,

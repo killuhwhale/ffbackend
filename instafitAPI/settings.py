@@ -39,6 +39,8 @@ env = environ.Env(
     RUN_ENV=(str, "dev"),
     REVENUECAT_TOKEN=(str, ""),
     OPENAI_API_KEY=(str, ""),
+    ANTHROPIC_API_KEY=(str, ""),
+    GEMINI_API_KEY=(str, ""),
 
 )
 environ.Env.read_env()
@@ -58,7 +60,12 @@ print(f"{DEBUG=} {os.getenv('USER')=}")
 
 SECRET_KEY = get_random_secret_key()
 OPENAI_API_KEY = cenv("OPENAI_API_KEY")
+ANTHROPIC_API_KEY = cenv("ANTHROPIC_API_KEY")
+GEMINI_API_KEY = cenv("GEMINI_API_KEY")
+
 print(f"{OPENAI_API_KEY=}")
+print(f"{ANTHROPIC_API_KEY=}")
+print(f"{GEMINI_API_KEY=}")
 
 ALLOWED_HOSTS = cenv("DJANGO_ALLOWED_HOSTS",
                           "127.0.0.1,localhost").split(",")
@@ -111,6 +118,7 @@ INSTALLED_APPS = [
     'django.contrib.contenttypes',
     # 'django.contrib.sessions',
     # 'django.contrib.messages',
+    'django.contrib.postgres',
     'django.contrib.staticfiles',
     'storages',
     'users.apps.UsersConfig',

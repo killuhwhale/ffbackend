@@ -1,10 +1,15 @@
 bin/
+lib/
+lib64
 gyms/__pycache__/
 gyms/create_workout_names.py
 instafitAPI/.env
 instafitAPI/__pycache__/
 users/__pycache__/
-
+docker-compose.yaml
+dockerfile
 node_modules
 
 __pycache__/
+
+

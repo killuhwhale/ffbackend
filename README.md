@@ -181,6 +181,8 @@ https://www.digitalocean.com/community/tutorials/how-to-set-up-django-with-postg
 
 ### Setup Postgres
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
+  - docket container -> db instanace -> Exec: `psql -U postgres`
+     - `CREATE EXTENSION IF NOT EXISTS pg_trgm;`
   - then, makemigrations && migrate
 
 

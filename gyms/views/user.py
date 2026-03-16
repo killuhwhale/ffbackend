@@ -1,5 +1,5 @@
 from django.db.models import Max
-from django.contrib.postgres.search import TrigramSimilarity
+from django.contrib.postgres.search import TrigramWordSimilarity
 from django.db.models.functions import Greatest
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
@@ -70,11 +70,11 @@ class ProfileViewSet(viewsets.ViewSet):
             WorkoutGroups.objects
             .filter(owner_id=user_id)
             .annotate(
-                title_similarity=TrigramSimilarity('title', query),
-                sub_similarity=Max(TrigramSimilarity('workouts__title', query)),
+                title_similarity=TrigramWordSimilarity(query, 'title'),
+                sub_similarity=Max(TrigramWordSimilarity(query, 'workouts__title')),
             )
             .annotate(similarity=Greatest('title_similarity', 'sub_similarity'))
-            .filter(similarity__gt=0.2)
+            .filter(similarity__gt=0.3)
             .order_by('-similarity')
             .distinct()
         )

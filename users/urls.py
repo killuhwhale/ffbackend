@@ -1,6 +1,7 @@
 from django.urls import include, path
 from rest_framework import routers
 from users import views as user_views
+from users.views import ping
 
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
@@ -22,4 +23,5 @@ urlpatterns = [
     path('token/', user_views.EmailTokenObtainPairView.as_view(),
          name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('ping/', ping, name='ping'),
 ]

@@ -64,9 +64,19 @@ class WorkoutGroupsViewSet(viewsets.ModelViewSet, WorkoutGroupsPermission):
         try:
             if not data['owned_by_class']:
                 data['owner_id'] = request.user.id
+            if 'creation_source' not in data or not data['creation_source']:
+                data['creation_source'] = (
+                    WorkoutGroups.CreationSource.TEMPLATE
+                    if jbool(data.get('is_template', False))
+                    else WorkoutGroups.CreationSource.MANUAL
+                )
             print("Attempting to create WorkoutGroup with data: ", data)
+            serializer = WorkoutGroupsCreateSerializer(
+                data={**data, 'media_ids': '[]'}
+            )
+            serializer.is_valid(raise_exception=True)
             workout_group, newly_created = WorkoutGroups.objects.get_or_create(
-                **{**data, 'media_ids': []})
+                **serializer.validated_data)
             if not newly_created:
                 return Response(to_err("Workout already created. Must delete and reupload w/ media or edit workout.", ))
         except Exception as e:
@@ -100,6 +110,7 @@ class WorkoutGroupsViewSet(viewsets.ModelViewSet, WorkoutGroupsPermission):
             "caption": caption,
             "owned_by_class": owned_by_class,
             "owner_id": owner_id,
+            "creation_source": WorkoutGroups.CreationSource.MANUAL,
             "finished": False,
             "media_ids": [],
             "archived": False,
@@ -109,7 +120,13 @@ class WorkoutGroupsViewSet(viewsets.ModelViewSet, WorkoutGroupsPermission):
             group_data['owner_id'] = request.user.id
 
         with transaction.atomic():
-            workout_group, newly_created = WorkoutGroups.objects.get_or_create(**{**group_data, 'media_ids': []})
+            group_serializer = WorkoutGroupsCreateSerializer(
+                data={**group_data, 'media_ids': '[]'}
+            )
+            group_serializer.is_valid(raise_exception=True)
+            workout_group, newly_created = WorkoutGroups.objects.get_or_create(
+                **group_serializer.validated_data
+            )
 
             for workout_json in workouts:
                 items = workout_json['workout_items']
@@ -297,8 +314,13 @@ class WorkoutGroupsViewSet(viewsets.ModelViewSet, WorkoutGroupsPermission):
             grp = WorkoutGroups.objects.get(id=wid)
             if grp:
                 print("Updating for date to: ", updated_for_date)
-                grp.for_date = updated_for_date
-                grp.save()
+                serializer = WorkoutGroupsCreateSerializer(
+                    grp,
+                    data={'for_date': updated_for_date},
+                    partial=True,
+                )
+                serializer.is_valid(raise_exception=True)
+                serializer.save()
                 return Response({"data": 'successfully updated for date'})
         return Response({"err": 'Failed to update for date'})
 

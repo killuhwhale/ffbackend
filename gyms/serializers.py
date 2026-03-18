@@ -1,6 +1,8 @@
+from datetime import datetime
 from importlib.metadata import requires
 from django.core.serializers import serialize
 from itertools import chain
+from django.utils import timezone
 from rest_framework import serializers
 from users.serializers import UserSerializer
 from gyms.models import (
@@ -10,6 +12,29 @@ from gyms.models import (
 
 import logging
 logger = logging.getLogger(__name__)
+
+
+class UTCDateOnlyField(serializers.DateTimeField):
+    def __init__(self, **kwargs):
+        kwargs.setdefault("format", "%Y-%m-%d")
+        kwargs.setdefault("input_formats", ["%Y-%m-%d", "iso-8601"])
+        kwargs.setdefault("default_timezone", timezone.utc)
+        super().__init__(**kwargs)
+
+    def _normalize(self, value):
+        if timezone.is_naive(value):
+            value = timezone.make_aware(value, timezone.utc)
+        value = value.astimezone(timezone.utc)
+        return value.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    def to_internal_value(self, value):
+        parsed = super().to_internal_value(value)
+        return self._normalize(parsed)
+
+    def to_representation(self, value):
+        if isinstance(value, datetime):
+            return self._normalize(value).strftime("%Y-%m-%d")
+        return super().to_representation(value)
 
 class Gym_ClassSerializer(serializers.ModelSerializer):
     ''' Searilzier gym_class for gym list. Avoid circular dependency'''
@@ -122,6 +147,7 @@ class CompletedWorkoutCreateSerializer(serializers.ModelSerializer):
 class CompletedWorkoutGroupsSerializer(serializers.ModelSerializer):
     completed_workouts = CompletedWorkoutSerializer(
         source="completedworkouts_set", many=True, required=False)
+    for_date = UTCDateOnlyField()
 
     class Meta:
         model = CompletedWorkoutGroups
@@ -131,6 +157,7 @@ class CompletedWorkoutGroupsSerializer(serializers.ModelSerializer):
 
 class CompletedWorkoutGroupsNoWorkoutsSerializer(serializers.ModelSerializer):
     completed = serializers.BooleanField(default=True)
+    for_date = UTCDateOnlyField()
 
     class Meta:
         model = CompletedWorkoutGroups
@@ -213,6 +240,8 @@ class WorkoutCreateSerializer(serializers.ModelSerializer):
 
 
 class WorkoutGroupsNoWorkoutsSerializer(serializers.ModelSerializer):
+    for_date = UTCDateOnlyField()
+
     class Meta:
         model = WorkoutGroups
         fields = '__all__'
@@ -223,6 +252,7 @@ class WorkoutGroupsSerializer(serializers.ModelSerializer):
         source="workouts_set", many=True, required=False)
     user_owner_id = serializers.SerializerMethodField('users_owner_id')
     completed = serializers.SerializerMethodField('has_completed')
+    for_date = UTCDateOnlyField()
 
     def users_owner_id(self, workout_group):
         '''
@@ -246,6 +276,7 @@ class WorkoutGroupsSerializer(serializers.ModelSerializer):
 
 
 class WorkoutGroupsCreateSerializer(serializers.ModelSerializer):
+    for_date = UTCDateOnlyField()
 
     class Meta:
         model = WorkoutGroups

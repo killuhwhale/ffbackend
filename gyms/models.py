@@ -63,9 +63,19 @@ class GymFavorites(models.Model):
 
 # Represents a Grouped Workout/ Media Post, allows to create multiple Workouts
 class WorkoutGroups(models.Model):
+    class CreationSource(models.TextChoices):
+        MANUAL = "manual", "Manual"
+        TEMPLATE = "template", "Template"
+        AI = "ai", "AI"
+
     owner_id = models.CharField(
         max_length=100, blank=False, null=False)  # Class ID or USER ID
     owned_by_class = models.BooleanField(default=True)
+    creation_source = models.CharField(
+        max_length=20,
+        choices=CreationSource.choices,
+        default=CreationSource.MANUAL,
+    )
     # Allows Workouts to be added to Group when false
     template_name = models.CharField(max_length=20, default="") # filter from templates
     template_num = models.SmallIntegerField(default=0)

@@ -1,6 +1,7 @@
 import json
 from django.test import Client, TestCase
 from django.urls import reverse
+from django.utils import timezone
 from gyms.models import ClassMembers, Coaches, CompletedWorkoutGroups, CompletedWorkoutItems, CompletedWorkouts, Gyms, GymClasses, WorkoutGroups, WorkoutItems, WorkoutNames, Workouts
 from django.contrib.auth import get_user_model
 from gyms.utils import tz_aware_date, tz_aware_today
@@ -661,3 +662,46 @@ class GymTestCase(TestCase):
             {'detail': 'Only users can create/delete completed workouts for themselves.'}
         )
 
+    def test_create_workout_group_stores_for_date_as_utc_midnight(self):
+        res = self.req.post(
+            "/workoutGroups/",
+            {
+                "owner_id": self.user_a.id,
+                "owned_by_class": "False",
+                "title": "UTC Date Test",
+                "caption": "date normalization",
+                "for_date": "2026-03-17",
+                "creation_source": "manual",
+            },
+            HTTP_AUTHORIZATION=f"Bearer {self.jwt_token_a}",
+        )
+
+        self.assertEqual(res.status_code, 200)
+        body = json.loads(res.content.decode())
+        self.assertEqual(body["for_date"], "2026-03-17")
+
+        workout_group = WorkoutGroups.objects.get(id=body["id"])
+        self.assertEqual(workout_group.for_date.tzinfo, timezone.utc)
+        self.assertEqual(
+            workout_group.for_date.isoformat(),
+            "2026-03-17T00:00:00+00:00",
+        )
+
+    def test_update_workout_group_for_date_stores_utc_midnight(self):
+        res = self.req.post(
+            "/workoutGroups/update_for_date/",
+            data=json.dumps({
+                "id": self.workoutgroup_b.id,
+                "for_date": "2026-03-17",
+                "user_id": self.user_b.id,
+            }),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.jwt_token_b}",
+        )
+
+        self.assertEqual(res.status_code, 200)
+        self.workoutgroup_b.refresh_from_db()
+        self.assertEqual(
+            self.workoutgroup_b.for_date.isoformat(),
+            "2026-03-17T00:00:00+00:00",
+        )

@@ -69,6 +69,7 @@ class BulkTemplateViewSet(viewsets.ViewSet):
             group = {**grp["group"]}
 
             group['template_num'] = template_num
+            group['creation_source'] = 'template'
 
             group_req = factory.post(
                 '/workoutGroups/',

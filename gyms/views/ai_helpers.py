@@ -1,5 +1,6 @@
 import copy
 import json
+from pathlib import Path
 import anthropic
 import tiktoken
 from openai import OpenAI
@@ -7,10 +8,16 @@ import google.generativeai as genai
 
 from instafitAPI import settings
 
+# Load workout generation philosophy once at import time
+_gen_rules_path = Path(__file__).resolve().parent.parent / "system_workout_generation_rules.md"
+WORKOUT_GENERATION_RULES = (
+    _gen_rules_path.read_text(encoding="utf-8") if _gen_rules_path.exists() else ""
+)
+
 LLM_ANTHROPIC = "anthropic"
 LLM_GEMINI = "gemini"
 LLM_OPENAI = "openai"
-LLM = LLM_OPENAI  # TODO() GET User Choice
+LLM = LLM_ANTHROPIC  # TODO() GET User Choice
 
 with open("gyms/create_workout_schema.json") as f:
     base_schema = json.load(f)
@@ -42,7 +49,10 @@ def generate_workout_with_claude(claude_client, base_schema, max_tokens, prompt,
         }
     ]
 
-    system_prompt = "You are a helpful super awesome Sports Strength and Conditioning Coach, your athlete needs a tailored workout plan that will map to their workout app so only structure output in json."
+    system_prompt = (
+        WORKOUT_GENERATION_RULES + "\n\n"
+        "Structure your output as JSON only — no extra text."
+    )
 
     user_content = (
         f"Workout maxes: {userMaxes}\n"
@@ -109,7 +119,11 @@ def generate_workout_with_gemini(base_schema, max_tokens, prompt, scheme_type_te
     # 3. FIX: Strip out all the "default" keys recursively
     gemini_schema = clean_gemini_schema(gemini_schema)
 
-    system_instruction = "You are a helpful super awesome Sports Strength and Conditioning Coach, your athlete needs a tailored workout plan that will map to their workout app so only structure output in json. " + base_schema.get("description", "")
+    system_instruction = (
+        WORKOUT_GENERATION_RULES + "\n\n"
+        "Structure your output as JSON only — no extra text.\n\n"
+        + base_schema.get("description", "")
+    )
 
     model = genai.GenerativeModel(
         'gemini-2.0-flash',
@@ -159,7 +173,10 @@ def generate_workout_with_gemini(base_schema, max_tokens, prompt, scheme_type_te
 
 def generate_workout_with_openai(client, tools, max_tokens, prompt, scheme_type_text, userMaxes, lastWorkoutGroups) -> dict:
     messages = [
-        {"role": "system", "content": "You are a helpful super awesome Sports Strength and Conditioning Coach, your athlete needs a tailored workout plan that will map to their workout app so only structure output in json."},
+        {"role": "system", "content": (
+            WORKOUT_GENERATION_RULES + "\n\n"
+            "Structure your output as JSON only — no extra text."
+        )},
         {"role": "user", "content": f"Workout maxes: {userMaxes}"},
         {"role": "user", "content": f"MyLast Couple of Workouts: {lastWorkoutGroups}"},
         {"role": "user", "content": f"Workout Scheme Style: {scheme_type_text}"},

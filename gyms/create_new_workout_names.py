@@ -159,6 +159,7 @@ workout_names = [
 {'name': 'Kipping Pull‑Up', 'desc': 'Pull‑up using hip‑drive kip to generate momentum and increase reps.', 'primary_id': 24, 'secondary_id': 24},
 {'name': 'Knee Slice Pass Drill', 'desc': 'Guard pass drill slicing knee through opponent’s guard to establish side control.', 'primary_id': 32, 'secondary_id': 32},
 {'name': 'Landmine', 'desc': 'Exercise involving a barbell anchored at one end and held at the other, targeting various muscle groups depending on the movement', 'primary_id': 25, 'secondary_id': 25},
+{'name': 'Lat Pulldown', 'desc': 'Cable machine exercise pulling a bar down to the upper chest, targeting the latissimus dorsi and biceps.', 'primary_id': 24, 'secondary_id': 24},
 {'name': 'Landmine Press', 'desc': 'Single‑arm press with barbell anchored in landmine attachment, for shoulder stability.', 'primary_id': 26, 'secondary_id': 26},
 {'name': 'Landmine Row', 'desc': 'Row variation using landmine barbell pivot, targeting lats and traps.', 'primary_id': 24, 'secondary_id': 24},
 {'name': 'Landmine Squat', 'desc': 'Goblet‑style squat holding end of landmine barbell at chest level.', 'primary_id': 23, 'secondary_id': 23},

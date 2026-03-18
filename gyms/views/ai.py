@@ -1,13 +1,20 @@
+import json
+import logging
+import traceback
+from pathlib import Path
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from gyms.models import TokenQuota
+logger = logging.getLogger(__name__)
+
+from gyms.models import TokenQuota, TokenPurchase
 from .ai_helpers import (
     LLM,
     LLM_ANTHROPIC,
     LLM_GEMINI,
     LLM_OPENAI,
+    WORKOUT_GENERATION_RULES,
     base_schema,
     claude_client,
     client,
@@ -18,11 +25,70 @@ from .ai_helpers import (
     tools,
 )
 from .permissions import SelfActionPermission
+from .helpers import is_member, check_users_workouts_and_completed_today
+import google.generativeai as genai
+
+# Load guardrail rules once at import time
+_rules_path = Path(__file__).resolve().parent.parent / "system_coach_chat_rules.md"
+COACH_CHAT_RULES = _rules_path.read_text(encoding="utf-8") if _rules_path.exists() else ""
+
+# Injected into system prompt for all LLMs — same format, no tool_use needed.
+# Claude 3.x follows this just as reliably as OpenAI without the fragility of forced tool_use.
+_JSON_FORMAT_INSTRUCTION = """
+## Response Format
+You MUST respond with ONLY a valid JSON object — no extra text before or after it:
+{"reply": "your message", "memory_update": null}
+
+If the user revealed new personal information (height, weight, diet, injuries, equipment, \
+training schedule, or any specific preference/limitation), set memory_update to an object \
+containing ONLY the newly revealed or changed fields:
+{"reply": "your message", "memory_update": {"weight": "185lbs", "diet": "mostly carnivore"}}
+
+Omit any memory_update fields the user did NOT mention this turn.
+"""
+
+
+def _parse_chat_response(raw):
+    # type: (str) -> tuple
+    """
+    Find the first '{' in the response, slice from there, parse as JSON.
+    Falls back to returning the raw text if no valid JSON is found.
+    Returns (reply: str, memory_update: dict or None).
+    """
+    brace = raw.find("{")
+    candidate = raw[brace:].strip() if brace != -1 else raw
+
+    try:
+        parsed = json.loads(candidate)
+        reply = parsed.get("reply", "").strip() or raw
+        raw_update = parsed.get("memory_update")
+        memory_update = None
+        if isinstance(raw_update, dict) and any(v for v in raw_update.values()):
+            memory_update = {k: v for k, v in raw_update.items() if v}
+        return reply, memory_update
+    except (json.JSONDecodeError, ValueError):
+        logger.warning("[chat] JSON parse failed — returning raw text len=%d", len(raw))
+        return raw, None
+
+# ── Token packages (hardcoded for mock IAP; move to DB for real IAP) ──────────
+TOKEN_PACKAGES = [
+    {"id": "starter",  "name": "Starter Pack",  "tokens": 250_000,   "price_usd": 2.99,  "description": "~50 AI workouts"},
+    {"id": "standard", "name": "Standard Pack", "tokens": 750_000,   "price_usd": 6.99,  "description": "~150 AI workouts"},
+    {"id": "pro",      "name": "Pro Pack",       "tokens": 2_000_000, "price_usd": 14.99, "description": "~400 AI workouts"},
+]
+TOKEN_PACKAGES_MAP = {p["id"]: p for p in TOKEN_PACKAGES}
 
 
 class AIViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['POST'], permission_classes=[SelfActionPermission])
     def create_workout(self, request, pk=None):
+
+        # ── Enforce workout creation limits before burning tokens ─────────────
+        if not is_member(request) and not check_users_workouts_and_completed_today(request):
+            return Response(
+                {"error": "Daily workout limit reached. Upgrade your membership to create more workouts."},
+                status=403
+            )
 
         quota, newly_created = TokenQuota.objects.get_or_create(user_id=request.user.id)
         prompt = request.data.get('prompt')  # Goal
@@ -41,7 +107,10 @@ class AIViewSet(viewsets.ViewSet):
             return Response({"error": 'Out of tokens'})
 
         messages = [
-            {"role": "system", "content": "You are a helpful super awesome Sports Strength and Conditioning Coach, your athlete needs a tailored workout plan that will map to their workout app so only structure output in json."},
+            {"role": "system", "content": (
+                WORKOUT_GENERATION_RULES + "\n\n"
+                "Structure your output as JSON only — no extra text."
+            )},
             {"role": "user", "content": f"Workout maxes: {userMaxes}"},
             {"role": "user", "content": f"MyLast Couple of Workouts: {lastWorkoutGroups}"},
             {"role": "user", "content": f"Workout Scheme Style: {scheme_type_text}"},
@@ -104,3 +173,207 @@ class AIViewSet(viewsets.ViewSet):
         except Exception as e:
             print("Error AI create_workout", e)
             return Response({'data': "", "error": str(e)})
+
+    @action(detail=False, methods=['POST'], permission_classes=[SelfActionPermission])
+    def chat(self, request, pk=None):
+        # ── Parse incoming payload ────────────────────────────────────────────
+        message        = request.data.get('message', '').strip()
+        history        = request.data.get('history', [])
+        coach_type     = request.data.get('coach_type', 'Fitness Coach')
+        goals          = request.data.get('goals', [])
+        fitness_info   = request.data.get('fitness_info', '')
+        memory_context = request.data.get('memory_context', '').strip()
+
+        logger.info(
+            "[chat] user=%s llm=%s coach=%r goals=%r "
+            "history_len=%d memory_len=%d msg_len=%d",
+            getattr(request.user, 'id', '?'),
+            LLM, coach_type, goals,
+            len(history), len(memory_context), len(message),
+        )
+
+        if not message:
+            logger.warning("[chat] rejected — empty message")
+            return Response({"error": "No message provided"}, status=400)
+
+        # ── Token quota ───────────────────────────────────────────────────────
+        try:
+            quota, _ = TokenQuota.objects.get_or_create(user_id=request.user.id)
+        except Exception:
+            logger.error("[chat] quota lookup failed\n%s", traceback.format_exc())
+            return Response({"error": "Could not retrieve token quota"}, status=500)
+
+        if quota.remaining_tokens <= 0:
+            logger.warning("[chat] user=%s out of tokens", request.user.id)
+            return Response({"error": "Out of tokens"}, status=403)
+
+        logger.info("[chat] tokens remaining=%d", quota.remaining_tokens)
+
+        # ── Build system prompt ───────────────────────────────────────────────
+        memory_section = (
+            f"\n\n## What you know about this athlete\n{memory_context}"
+            if memory_context else ""
+        )
+        base_system_prompt = (
+            f"{COACH_CHAT_RULES}\n\n"
+            f"---\n"
+            f"You are a {coach_type}. "
+            f"The athlete's goals: {', '.join(goals) if goals else 'general fitness'}. "
+            f"Background: {fitness_info}."
+            f"{memory_section}"
+        )
+
+        try:
+            reply         = ""
+            memory_update = None
+            tokens_used   = 0
+
+            # ── OpenAI ───────────────────────────────────────────────────────
+            if LLM == LLM_OPENAI:
+                logger.info("[chat/openai] building messages history_len=%d", len(history))
+                system_prompt = base_system_prompt + _JSON_FORMAT_INSTRUCTION
+                messages = [{"role": "system", "content": system_prompt}]
+                messages += [{"role": m["role"], "content": m["content"]} for m in history]
+                messages.append({"role": "user", "content": message})
+
+                logger.info("[chat/openai] calling API messages=%d", len(messages))
+                resp = client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    temperature=0.6,
+                    messages=messages,
+                    max_tokens=450,
+                    response_format={"type": "json_object"},
+                )
+                raw = resp.choices[0].message.content.strip()
+                tokens_used = resp.usage.total_tokens
+                logger.info("[chat/openai] raw=%r tokens=%d", raw[:120], tokens_used)
+                reply, memory_update = _parse_chat_response(raw)
+                logger.info("[chat/openai] reply_len=%d memory_update=%s", len(reply), bool(memory_update))
+
+            # ── Anthropic / Claude ────────────────────────────────────────────
+            # Plain JSON-in-prompt — no tool_use. Simpler, cheaper, and avoids
+            # Anthropic's safety layer blocking forced tool_choice responses.
+            elif LLM == LLM_ANTHROPIC:
+                system_prompt = base_system_prompt + _JSON_FORMAT_INSTRUCTION
+                claude_messages = [{"role": m["role"], "content": m["content"]} for m in history]
+                claude_messages.append({"role": "user", "content": message})
+                logger.info("[chat/claude] calling API messages=%d", len(claude_messages))
+
+                resp = claude_client.messages.create(
+                    model="claude-sonnet-4-6",
+                    max_tokens=600,
+                    system=system_prompt,
+                    messages=claude_messages,
+                )
+                tokens_used = resp.usage.input_tokens + resp.usage.output_tokens
+                raw = resp.content[0].text.strip() if resp.content else ""
+                logger.info(
+                    "[chat/claude] stop_reason=%r tokens=%d raw=%r",
+                    resp.stop_reason, tokens_used, raw[:120],
+                )
+                reply, memory_update = _parse_chat_response(raw)
+                logger.info("[chat/claude] reply_len=%d memory_update=%s", len(reply), bool(memory_update))
+
+            # ── Gemini ────────────────────────────────────────────────────────
+            elif LLM == LLM_GEMINI:
+                logger.info("[chat/gemini] building history history_len=%d", len(history))
+                system_prompt = base_system_prompt + _JSON_FORMAT_INSTRUCTION
+                model = genai.GenerativeModel(
+                    'gemini-2.0-flash',
+                    system_instruction=system_prompt,
+                )
+                gemini_history = [
+                    {
+                        "role": m["role"] if m["role"] != "assistant" else "model",
+                        "parts": [m["content"]],
+                    }
+                    for m in history
+                ]
+                config = genai.GenerationConfig(
+                    response_mime_type="application/json",
+                    temperature=0.6,
+                    max_output_tokens=450,
+                )
+                logger.info("[chat/gemini] calling API")
+                chat_session = model.start_chat(history=gemini_history)
+                resp = chat_session.send_message(message, generation_config=config)
+                raw = resp.text.strip()
+                tokens_used = resp.usage_metadata.total_token_count
+                logger.info("[chat/gemini] raw=%r tokens=%d", raw[:120], tokens_used)
+                reply, memory_update = _parse_chat_response(raw)
+                logger.info("[chat/gemini] reply_len=%d memory_update=%s", len(reply), bool(memory_update))
+
+            else:
+                logger.error("[chat] unknown LLM value: %r", LLM)
+                return Response({"error": f"Unknown LLM backend: {LLM}"}, status=500)
+
+            # ── Final guard: make sure we have something to return ────────────
+            if not reply:
+                logger.error("[chat] reply is empty after LLM call — tokens_used=%d", tokens_used)
+                return Response({"error": "Coach returned an empty response. Please try again."}, status=500)
+
+            # ── Deduct tokens ─────────────────────────────────────────────────
+            logger.info("[chat] deducting tokens=%d", tokens_used)
+            quota.use_tokens(tokens_used)
+
+            logger.info("[chat] success reply_len=%d memory_update=%s", len(reply), bool(memory_update))
+            return Response({"reply": reply, "memory_update": memory_update})
+
+        except Exception as e:
+            logger.error(
+                "[chat] UNHANDLED EXCEPTION user=%s llm=%s\n%s",
+                getattr(request.user, 'id', '?'),
+                LLM,
+                traceback.format_exc(),
+            )
+            return Response({"error": f"Chat error: {str(e)}"}, status=500)
+
+    @action(detail=False, methods=['GET'], permission_classes=[SelfActionPermission])
+    def token_status(self, request, pk=None):
+        quota, _ = TokenQuota.objects.get_or_create(user_id=request.user.id)
+        quota.reset_if_expired()
+
+        history = TokenPurchase.objects.filter(
+            user_id=request.user.id
+        ).values("package_id", "tokens_added", "price_paid_usd", "method", "created_at")[:10]
+
+        return Response({
+            "remaining_tokens":  quota.remaining_tokens,
+            "total_tokens_used": quota.total_tokens_used,
+            "reset_at":          quota.reset_at,
+            "packages":          TOKEN_PACKAGES,
+            "purchase_history":  list(history),
+        })
+
+    @action(detail=False, methods=['POST'], permission_classes=[SelfActionPermission])
+    def purchase_tokens(self, request, pk=None):
+        package_id = request.data.get("package_id")
+        method     = request.data.get("method", TokenPurchase.MOCK)
+
+        package = TOKEN_PACKAGES_MAP.get(package_id)
+        if not package:
+            return Response({"error": f"Unknown package: {package_id}"}, status=400)
+
+        # For real IAP: verify receipt here before adding tokens.
+        # For mock/promo: just credit immediately.
+        ALLOWED_MOCK_METHODS = [TokenPurchase.MOCK]
+        if method not in ALLOWED_MOCK_METHODS:
+            return Response({"error": "Real IAP not yet implemented."}, status=400)
+
+        quota, _ = TokenQuota.objects.get_or_create(user_id=request.user.id)
+        quota.add_tokens(package["tokens"])
+
+        TokenPurchase.objects.create(
+            user_id=request.user.id,
+            package_id=package_id,
+            tokens_added=package["tokens"],
+            price_paid_usd=package["price_usd"],
+            method=method,
+        )
+
+        return Response({
+            "success":          True,
+            "tokens_added":     package["tokens"],
+            "remaining_tokens": quota.remaining_tokens,
+            "package":          package,
+        })

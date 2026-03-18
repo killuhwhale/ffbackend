@@ -166,6 +166,8 @@ https://www.digitalocean.com/community/tutorials/how-to-set-up-django-with-postg
 ## Prod
  cd ffbackend/
  docker compose -f docker-compose_prod.yml up
+ #### Refresh .env in docker
+ docker compose -f docker-compose.yaml up -d --build
  docker compose -f docker-compose_prod.yml exec instafitapiprod pip install -r requirements.txt
  docker compose -f docker-compose_prod.yml exec instafitapiprod bash migrate_create.sh
  ---

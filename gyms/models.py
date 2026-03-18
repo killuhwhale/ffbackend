@@ -290,9 +290,10 @@ class CompletedWorkoutDualItems(models.Model):
 
 
 class TokenQuota(models.Model):
-    user_id = models.CharField(max_length=100, blank=False, null=False, unique=True)
-    remaining_tokens = models.PositiveIntegerField(default=1_000_000)
-    reset_at = models.DateTimeField(default=timezone.now)
+    user_id           = models.CharField(max_length=100, blank=False, null=False, unique=True)
+    remaining_tokens  = models.PositiveIntegerField(default=1_000_000)
+    total_tokens_used = models.BigIntegerField(default=0)   # lifetime counter
+    reset_at          = models.DateTimeField(default=timezone.now)
 
     def reset_if_expired(self):
         if timezone.now() >= self.reset_at:
@@ -304,12 +305,44 @@ class TokenQuota(models.Model):
         self.reset_if_expired()
         if self.remaining_tokens < amount:
             return False
-        self.remaining_tokens -= amount
+        self.remaining_tokens    -= amount
+        self.total_tokens_used   += amount
         self.save()
         return True
 
+    def add_tokens(self, amount: int) -> None:
+        self.remaining_tokens += amount
+        self.save()
+
     def __str__(self):
-        return f"{self.user_id}: {self.remaining_tokens} tokens (resets {self.reset_at})"
+        return f"{self.user_id}: {self.remaining_tokens} remaining / {self.total_tokens_used} used lifetime"
+
+
+class TokenPurchase(models.Model):
+    MOCK   = "mock"
+    STRIPE = "stripe"
+    APPLE  = "apple"
+    GOOGLE = "google"
+    METHOD_CHOICES = [
+        (MOCK,   "Mock (dev/promo)"),
+        (STRIPE, "Stripe"),
+        (APPLE,  "Apple IAP"),
+        (GOOGLE, "Google Play"),
+    ]
+
+    user_id         = models.CharField(max_length=100, blank=False, null=False)
+    package_id      = models.CharField(max_length=50)
+    tokens_added    = models.PositiveIntegerField()
+    price_paid_usd  = models.DecimalField(max_digits=8, decimal_places=2, default=0)
+    method          = models.CharField(max_length=20, choices=METHOD_CHOICES, default=MOCK)
+    transaction_ref = models.CharField(max_length=255, blank=True, default="")  # store receipt/txn id later
+    created_at      = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.user_id} +{self.tokens_added} tokens via {self.method} @ ${self.price_paid_usd}"
 
 
 

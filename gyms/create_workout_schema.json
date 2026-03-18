@@ -8,6 +8,15 @@
           "type": "string",
           "description": "User's workout goal, e.g. 'build glutes and quads', 'increase endurance', etc."
         },
+        "title": {
+          "type": "string",
+          "description": "A short, punchy workout title (3-6 words max). E.g. 'Heavy Leg Day', 'Diane', 'Push & Pull Superset'. Should reflect the workout theme."
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 240,
+          "description": "A 1-2 sentence description of the workout summarizing the focus, intensity, and any key notes for the athlete. Must be 240 characters or fewer."
+        },
         "workout_type": {
           "type": "string",
           "enum": ["STANDARD", "REPS", "ROUNDS", "CREATIVE"],
@@ -59,6 +68,6 @@
           }
         }
       },
-      "required": ["goal", "workout_type", "scheme_rounds"]
+      "required": ["goal", "title", "description", "workout_type", "scheme_rounds"]
     }
   }

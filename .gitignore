@@ -15,3 +15,6 @@ __pycache__/
 
 dataprod/
 data/
+
+.env
+README.md

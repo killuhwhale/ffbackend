@@ -70,13 +70,55 @@ def _parse_chat_response(raw):
         logger.warning("[chat] JSON parse failed — returning raw text len=%d", len(raw))
         return raw, None
 
-# ── Token packages (hardcoded for mock IAP; move to DB for real IAP) ──────────
+# ── Token packages ─────────────────────────────────────────────────────────────
+# 1 credit ≈ 1 workout generation (~18k tokens) or ~8-10 coaching chat messages.
+#
+# Two purchase paths — keep these IDs in sync with stripeHooks/views.py:
+#   Mobile : Apple App Store / Google Play via RevenueCat (IAP)
+#   Web    : Stripe Checkout (one-time payment)
+TOKENS_PER_CREDIT = 18_000
+
 TOKEN_PACKAGES = [
-    {"id": "starter",  "name": "Starter Pack",  "tokens": 250_000,   "price_usd": 2.99,  "description": "~50 AI workouts"},
-    {"id": "standard", "name": "Standard Pack", "tokens": 750_000,   "price_usd": 6.99,  "description": "~150 AI workouts"},
-    {"id": "pro",      "name": "Pro Pack",       "tokens": 2_000_000, "price_usd": 14.99, "description": "~400 AI workouts"},
+    {
+        "name":             "Starter",
+        "credits":          5,
+        "tokens":           5 * TOKENS_PER_CREDIT,   # 90,000
+        "price_usd":        3.99,
+        "description":      "5 AI Credits",
+        # Mobile IAP — create these in App Store Connect & Google Play Console
+        "apple_product_id":  "com.liftl0g.aicredits.5",   # placeholder
+        "google_product_id": "ai_credits_5",                # placeholder
+        # Web — Stripe price ID (test mode)
+        "stripe_price_id":   "price_1TDsVQGjKlPKN3XK7wY16yQb",
+    },
+    {
+        "name":             "Popular",
+        "credits":          15,
+        "tokens":           15 * TOKENS_PER_CREDIT,  # 270,000
+        "price_usd":        9.99,
+        "description":      "15 AI Credits",
+        "apple_product_id":  "com.liftl0g.aicredits.15",  # placeholder
+        "google_product_id": "ai_credits_15",               # placeholder
+        "stripe_price_id":   "price_1TDsVQGjKlPKN3XKyGB2Vhft",
+    },
+    {
+        "name":             "Pro",
+        "credits":          35,
+        "tokens":           35 * TOKENS_PER_CREDIT,  # 630,000
+        "price_usd":        19.99,
+        "description":      "35 AI Credits",
+        "apple_product_id":  "com.liftl0g.aicredits.35",  # placeholder
+        "google_product_id": "ai_credits_35",               # placeholder
+        "stripe_price_id":   "price_1TDsVRGjKlPKN3XKDOWj1CQ8",
+    },
 ]
-TOKEN_PACKAGES_MAP = {p["id"]: p for p in TOKEN_PACKAGES}
+
+# Mobile IAP lookup — keyed by store-native product ID (Apple or Google).
+# Used by the purchase_tokens endpoint when the app confirms an IAP.
+TOKEN_PACKAGES_MAP: dict = {}
+for _p in TOKEN_PACKAGES:
+    TOKEN_PACKAGES_MAP[_p["apple_product_id"]]  = _p
+    TOKEN_PACKAGES_MAP[_p["google_product_id"]] = _p
 
 
 class AIViewSet(viewsets.ViewSet):
@@ -347,18 +389,29 @@ class AIViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=['POST'], permission_classes=[SelfActionPermission])
     def purchase_tokens(self, request, pk=None):
-        package_id = request.data.get("package_id")
-        method     = request.data.get("method", TokenPurchase.MOCK)
+        package_id      = request.data.get("package_id")
+        method          = request.data.get("method", TokenPurchase.MOCK)
+        transaction_ref = request.data.get("transaction_ref", "").strip()
 
         package = TOKEN_PACKAGES_MAP.get(package_id)
         if not package:
             return Response({"error": f"Unknown package: {package_id}"}, status=400)
 
-        # For real IAP: verify receipt here before adding tokens.
-        # For mock/promo: just credit immediately.
-        ALLOWED_MOCK_METHODS = [TokenPurchase.MOCK]
-        if method not in ALLOWED_MOCK_METHODS:
-            return Response({"error": "Real IAP not yet implemented."}, status=400)
+        ALLOWED_METHODS = [TokenPurchase.MOCK, TokenPurchase.APPLE, TokenPurchase.GOOGLE]
+        if method not in ALLOWED_METHODS:
+            return Response({"error": f"Unknown purchase method: {method}"}, status=400)
+
+        # Idempotency: RevenueCat webhook and the client may both call this.
+        # If we've already processed this transaction, return success without double-crediting.
+        if transaction_ref and TokenPurchase.objects.filter(transaction_ref=transaction_ref).exists():
+            quota, _ = TokenQuota.objects.get_or_create(user_id=request.user.id)
+            return Response({
+                "success":          True,
+                "tokens_added":     0,
+                "remaining_tokens": quota.remaining_tokens,
+                "package":          package,
+                "duplicate":        True,
+            })
 
         quota, _ = TokenQuota.objects.get_or_create(user_id=request.user.id)
         quota.add_tokens(package["tokens"])
@@ -369,6 +422,7 @@ class AIViewSet(viewsets.ViewSet):
             tokens_added=package["tokens"],
             price_paid_usd=package["price_usd"],
             method=method,
+            transaction_ref=transaction_ref,
         )
 
         return Response({

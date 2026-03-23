@@ -301,7 +301,7 @@ class CompletedWorkoutDualItems(models.Model):
 
 class TokenQuota(models.Model):
     user_id           = models.CharField(max_length=100, blank=False, null=False, unique=True)
-    remaining_tokens  = models.PositiveIntegerField(default=1_000_000)
+    remaining_tokens  = models.PositiveIntegerField(default=0)
     total_tokens_used = models.BigIntegerField(default=0)   # lifetime counter
     reset_at          = models.DateTimeField(default=timezone.now)
 

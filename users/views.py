@@ -26,6 +26,10 @@ from users.serializers import (
     UserCreateSerializer, UserSerializer, GroupSerializer,
     UserWithoutEmailSerializer, MyTokenObtainPairSerializer
 )
+from instafitAPI.throttles import (
+    LoginRateThrottle, PasswordResetSendThrottle,
+    PasswordResetSubmitThrottle, UserCreateThrottle,
+)
 env = environ.Env()
 tz = pytz.timezone("US/Pacific")
 s3_client = s3Client()
@@ -69,6 +73,12 @@ class UserViewSet(viewsets.ModelViewSet):
     queryset = get_user_model().objects.all().order_by('-date_joined')
     serializer_class = UserSerializer
     permission_classes = [UsersPermission]
+
+    def get_throttles(self):
+        # Only throttle account creation; other actions use the global default.
+        if self.action == "create":
+            return [UserCreateThrottle()]
+        return super().get_throttles()
 
     @action(detail=False, methods=['POST'], permission_classes=[permissions.IsAuthenticated])
     def update_username(self, request, pk=None):
@@ -268,10 +278,10 @@ class ResetPasswordEmailViewSet(viewsets.ViewSet):
             return {'error': 'Email API Failed!.'}
         return {'data': "Email Sent!"}
 
-    @action(detail=False, methods=['POST'], permission_classes=[])
+    @action(detail=False, methods=['POST'], permission_classes=[], throttle_classes=[PasswordResetSendThrottle])
     def send_reset_code(self, request, pk=None):
         '''  '''
-        email = request.data.get("email")
+        email = request.data.get("email") or request.data.get("resetEmail")
         print("send_reset_code request.data: ", request.data)
         user = self._get_user(email)
 
@@ -287,7 +297,7 @@ class ResetPasswordEmailViewSet(viewsets.ViewSet):
 
 
 
-    @action(detail=False, methods=['POST'], permission_classes=[])
+    @action(detail=False, methods=['POST'], permission_classes=[], throttle_classes=[PasswordResetSubmitThrottle])
     def reset_password(self, request, pk=None):
         email = request.data.get("email")
         user_code = request.data.get("reset_code")
@@ -354,6 +364,7 @@ class GroupViewSet(viewsets.ModelViewSet):
 
 class EmailTokenObtainPairView(TokenObtainPairView):
     serializer_class = MyTokenObtainPairSerializer
+    throttle_classes = [LoginRateThrottle]
 
 
 from rest_framework.decorators import api_view, permission_classes

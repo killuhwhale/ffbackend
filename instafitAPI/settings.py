@@ -135,6 +135,29 @@ REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ],
+    # ── Throttling ─────────────────────────────────────────────────────────────
+    # Applied globally to anon traffic; sensitive endpoints use tighter scopes
+    # defined in instafitAPI/throttles.py.
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon':                   '120/min',   # global anon fallback
+        'login':                  '5/min',     # POST /token/        — brute-force guard
+        'password_reset_send':    '3/hour',    # POST /user/send_reset_code/ — email spam guard
+        'password_reset_submit':  '10/hour',   # POST /user/reset_password/ — code-guess guard
+        'user_create':            '3/hour',    # POST /users/        — account creation spam
+    },
+}
+
+# ── Cache (used by DRF throttling) ─────────────────────────────────────────────
+# Default LocMemCache is per-process. Fine for a single gunicorn worker.
+# For multi-worker deployments, swap to Redis (see instafitAPI/throttles.py).
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "liftl0g-throttle",
+    }
 }
 
 MIDDLEWARE = [
@@ -225,6 +248,21 @@ elif os.getenv("USER") == "killuh" or os.getenv("USER") == "chrisandaya":
     BASE_URL = "http://localhost:8000"
 
 print(f"using {BASE_URL=}", cenv("RUN_ENV"))
+
+# ─── Stripe ───────────────────────────────────────────────────────────────────
+# Products
+STRIPE_PRODUCT_ID_PLUS     = cenv("STRIPE_PRODUCT_ID_PLUS",     "prod_UBGnbruS5muMDj")
+STRIPE_PRODUCT_ID_PRO      = cenv("STRIPE_PRODUCT_ID_PRO",      "prod_UBGzZhFE9cvMAp")
+STRIPE_PRODUCT_ID_COACHES  = cenv("STRIPE_PRODUCT_ID_COACHES",  "prod_UBGvVRT55perz0")
+
+# Prices
+STRIPE_PRICE_ID_PLUS       = cenv("STRIPE_PRICE_ID_PLUS",    "price_1TCuFVGjKlPKN3XKK8YdNuaX")  # $9/mo subscription
+STRIPE_PRICE_ID_PRO        = cenv("STRIPE_PRICE_ID_PRO",     "price_1TCuRcGjKlPKN3XKuOezMEM1")  # $12 one-time
+STRIPE_PRICE_ID_COACHES    = cenv("STRIPE_PRICE_ID_COACHES", "price_1TCuNJGjKlPKN3XKUQENhNdw")  # $0/wk metered
+
+# Default price used when none specified (Plus subscription)
+STRIPE_PRICE_ID            = cenv("STRIPE_PRICE_ID",         "price_1TCuFVGjKlPKN3XKK8YdNuaX")
+
 # Password validation
 # https://docs.djangoproject.com/en/4.0/ref/settings/#auth-password-validators
 

@@ -12,6 +12,7 @@ node_modules
 
 __pycache__/
 */migrations/*.py
+*/__pycache__/*
 
 dataprod/
 data/

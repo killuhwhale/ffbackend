@@ -216,7 +216,7 @@ if os.getenv("USER") == "killuh" and len(sys.argv) > 1 and sys.argv[1] != 'colle
         "default": dj_database_url.parse(cenv("DATABASE_URL")),
     }
     BASE_URL = 'https://reptrackrr.com/ffapi'
-elif os.getenv("USER") == "localdocker":
+elif os.getenv("USER") == "localdocker" and cenv("RUN_ENV") == "production":
     DATABASES = {
         "default":  {
             'ENGINE': 'django.db.backends.postgresql_psycopg2',
@@ -227,7 +227,20 @@ elif os.getenv("USER") == "localdocker":
             'PORT': '5432',
         }
     }
-    BASE_URL = "http://localhost:8000"
+    # BASE_URL = "http://localhost:8000"
+    BASE_URL = 'https://reptrackrr.com/ffapi'
+elif os.getenv("USER") == "localdocker" and cenv("RUN_ENV") == "dev":
+    DATABASES = {
+        "default":  {
+            'ENGINE': 'django.db.backends.postgresql_psycopg2',
+            'NAME': env('POSTGRES_NAME'),
+            'USER': env('POSTGRES_USER'),
+            'PASSWORD':  env('POSTGRES_PASSWORD'),
+            'HOST': 'db',
+            'PORT': '5432',
+        }
+    }
+    BASE_URL = 'https://reptrackrr.com/ffapi'
 elif os.getenv("USER") == "killuh" or os.getenv("USER") == "chrisandaya":
     DATABASES = {
         "default":  {

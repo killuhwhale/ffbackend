@@ -387,11 +387,25 @@ class HookViewSet(viewsets.ViewSet):
                 print(f"[RevenueCat] CANCELLATION: {user_id=}, {cancel_reason=}, {exp_date=}, {product_id=}")
                 logger.info(f"[RevenueCat] CANCELLATION: {user_id=}, {cancel_reason=}")
 
+                # Ensure sub_end_date reflects the expiration so access stops at the right time
+                user = get_user(user_id)
+                if user and exp_date:
+                    user.sub_end_date = datetime.fromtimestamp(exp_date // 1000, tz=timezone.utc)
+                    user.save()
+                    print(f"[RevenueCat] Set sub_end_date to expiration for {user_id=}: {user.sub_end_date}")
+
             # ── Uncancellation (user re-enabled auto-renew) ─────────────────
             elif event_type == "UNCANCELLATION":
                 exp_date = event.get("expiration_at_ms")
                 print(f"[RevenueCat] UNCANCELLATION: {user_id=}, {exp_date=}, {product_id=}")
                 logger.info(f"[RevenueCat] UNCANCELLATION: {user_id=}")
+
+                # User re-subscribed — update sub_end_date
+                user = get_user(user_id)
+                if user and exp_date:
+                    user.sub_end_date = datetime.fromtimestamp(exp_date // 1000, tz=timezone.utc)
+                    user.save()
+                    print(f"[RevenueCat] Updated sub_end_date for {user_id=}: {user.sub_end_date}")
 
             # ── Expiration ──────────────────────────────────────────────────
             elif event_type == "EXPIRATION":
@@ -399,6 +413,13 @@ class HookViewSet(viewsets.ViewSet):
                 exp_date = event.get("expiration_at_ms")
                 print(f"[RevenueCat] EXPIRATION: {user_id=}, {expiration_reason=}, {exp_date=}, {product_id=}")
                 logger.info(f"[RevenueCat] EXPIRATION: {user_id=}, {expiration_reason=}")
+
+                # Sub expired — set sub_end_date to now to revoke access
+                user = get_user(user_id)
+                if user:
+                    user.sub_end_date = datetime.now(tz=timezone.utc)
+                    user.save()
+                    print(f"[RevenueCat] Expired sub for {user_id=}")
 
             # ── Billing issue ───────────────────────────────────────────────
             elif event_type == "BILLING_ISSUE":
@@ -423,6 +444,12 @@ class HookViewSet(viewsets.ViewSet):
                 exp_date = event.get("expiration_at_ms")
                 print(f"[RevenueCat] SUBSCRIPTION_EXTENDED: {user_id=}, {exp_date=}, {product_id=}")
                 logger.info(f"[RevenueCat] SUBSCRIPTION_EXTENDED: {user_id=}, {exp_date=}")
+
+                user = get_user(user_id)
+                if user and exp_date:
+                    user.sub_end_date = datetime.fromtimestamp(exp_date // 1000, tz=timezone.utc)
+                    user.save()
+                    print(f"[RevenueCat] Extended sub for {user_id=}: {user.sub_end_date}")
 
             # ── Transfer ────────────────────────────────────────────────────
             elif event_type == "TRANSFER":

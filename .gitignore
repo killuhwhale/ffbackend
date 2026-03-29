@@ -11,10 +11,11 @@ dockerfile
 node_modules
 
 __pycache__/
-
+*/migrations/*.py
 
 dataprod/
 data/
 
 .env
 README.md
+pyvenv.cfg

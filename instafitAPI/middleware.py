@@ -63,8 +63,12 @@ class JWTMiddleware:
                 print(f"Needs access token  for this users request, only post is bypassed... {request.method=}",)
                 # return JsonResponse({'error': f'Invalid access token, route not permitted '}, status=401)
             elif request.path == "/hooks/revenuecat/":
-                if request.META.get('HTTP_AUTHORIZATION') == env("REVENUECAT_TOKEN"):
-                    print("Reveneue cat access granted..")
+                auth_header = request.META.get('HTTP_AUTHORIZATION', '')
+                expected_token = env("REVENUECAT_TOKEN")
+                # Support both "Bearer <token>" and raw token formats
+                provided_token = auth_header.replace("Bearer ", "", 1) if auth_header.startswith("Bearer ") else auth_header
+                if expected_token and provided_token == expected_token:
+                    print("RevenueCat access granted..")
                     response = self.get_response(request)
                     return response
                 else:

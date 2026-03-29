@@ -305,14 +305,7 @@ class TokenQuota(models.Model):
     total_tokens_used = models.BigIntegerField(default=0)   # lifetime counter
     reset_at          = models.DateTimeField(default=timezone.now)
 
-    def reset_if_expired(self):
-        if timezone.now() >= self.reset_at:
-            self.remaining_tokens = 1_750_000
-            self.reset_at = timezone.now() + timedelta(days=30)
-            self.save()
-
     def use_tokens(self, amount: int) -> bool:
-        self.reset_if_expired()
         if self.remaining_tokens < amount:
             return False
         self.remaining_tokens    -= amount
@@ -323,6 +316,12 @@ class TokenQuota(models.Model):
     def add_tokens(self, amount: int) -> None:
         self.remaining_tokens += amount
         self.save()
+
+    def top_off_tokens(self, cap: int) -> None:
+        """Top off tokens to a cap — no rollover. If already above cap, do nothing."""
+        if self.remaining_tokens < cap:
+            self.remaining_tokens = cap
+            self.save()
 
     def __str__(self):
         return f"{self.user_id}: {self.remaining_tokens} remaining / {self.total_tokens_used} used lifetime"

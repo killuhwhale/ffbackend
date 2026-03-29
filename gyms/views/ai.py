@@ -24,6 +24,7 @@ from .ai_helpers import (
     generate_workout_with_openai,
     tools,
 )
+from ..coach_personalities import get_coach_profile
 from .permissions import SelfActionPermission
 from .helpers import is_member, check_users_workouts_and_completed_today
 import google.generativeai as genai
@@ -51,12 +52,39 @@ Omit any memory_update fields the user did NOT mention this turn.
 def _parse_chat_response(raw):
     # type: (str) -> tuple
     """
-    Find the first '{' in the response, slice from there, parse as JSON.
-    Falls back to returning the raw text if no valid JSON is found.
+    Extract the JSON object from the LLM response, handling markdown code fences,
+    trailing text, and nested braces.
     Returns (reply: str, memory_update: dict or None).
     """
-    brace = raw.find("{")
-    candidate = raw[brace:].strip() if brace != -1 else raw
+    # Strip markdown code fences if present (```json ... ``` or ``` ... ```)
+    text = raw.strip()
+    if text.startswith("```"):
+        # Remove opening fence (with optional language tag)
+        first_newline = text.find("\n")
+        if first_newline != -1:
+            text = text[first_newline + 1:]
+        # Remove closing fence
+        if text.rstrip().endswith("```"):
+            text = text.rstrip()[:-3].rstrip()
+
+    # Find the outermost JSON object by matching braces
+    brace = text.find("{")
+    if brace == -1:
+        logger.warning("[chat] no JSON object found in response len=%d", len(raw))
+        return raw, None
+
+    depth = 0
+    end = brace
+    for i in range(brace, len(text)):
+        if text[i] == "{":
+            depth += 1
+        elif text[i] == "}":
+            depth -= 1
+            if depth == 0:
+                end = i + 1
+                break
+
+    candidate = text[brace:end]
 
     try:
         parsed = json.loads(candidate)
@@ -67,7 +95,7 @@ def _parse_chat_response(raw):
             memory_update = {k: v for k, v in raw_update.items() if v}
         return reply, memory_update
     except (json.JSONDecodeError, ValueError):
-        logger.warning("[chat] JSON parse failed — returning raw text len=%d", len(raw))
+        logger.warning("[chat] JSON parse failed — candidate=%r", candidate[:200])
         return raw, None
 
 # ── Token packages ─────────────────────────────────────────────────────────────
@@ -86,8 +114,8 @@ TOKEN_PACKAGES = [
         "price_usd":        3.99,
         "description":      "5 AI Credits",
         # Mobile IAP — create these in App Store Connect & Google Play Console
-        "apple_product_id":  "com.liftl0g.aicredits.5",   # placeholder
-        "google_product_id": "ai_credits_5",                # placeholder
+        "apple_product_id":  "ai_credits_5",
+        "google_product_id": "ai_credits_5",
         # Web — Stripe price ID (test mode)
         "stripe_price_id":   "price_1TDsVQGjKlPKN3XK7wY16yQb",
     },
@@ -97,8 +125,8 @@ TOKEN_PACKAGES = [
         "tokens":           15 * TOKENS_PER_CREDIT,  # 270,000
         "price_usd":        9.99,
         "description":      "15 AI Credits",
-        "apple_product_id":  "com.liftl0g.aicredits.15",  # placeholder
-        "google_product_id": "ai_credits_15",               # placeholder
+        "apple_product_id":  "ai_credits_15",
+        "google_product_id": "ai_credits_15",
         "stripe_price_id":   "price_1TDsVQGjKlPKN3XKyGB2Vhft",
     },
     {
@@ -107,8 +135,8 @@ TOKEN_PACKAGES = [
         "tokens":           35 * TOKENS_PER_CREDIT,  # 630,000
         "price_usd":        19.99,
         "description":      "35 AI Credits",
-        "apple_product_id":  "com.liftl0g.aicredits.35",  # placeholder
-        "google_product_id": "ai_credits_35",               # placeholder
+        "apple_product_id":  "ai_credits_35",
+        "google_product_id": "ai_credits_35",
         "stripe_price_id":   "price_1TDsVRGjKlPKN3XKDOWj1CQ8",
     },
 ]
@@ -252,15 +280,18 @@ class AIViewSet(viewsets.ViewSet):
         logger.info("[chat] tokens remaining=%d", quota.remaining_tokens)
 
         # ── Build system prompt ───────────────────────────────────────────────
+        coach_profile = get_coach_profile(coach_type)
         memory_section = (
             f"\n\n## What you know about this athlete\n{memory_context}"
             if memory_context else ""
         )
         base_system_prompt = (
             f"{COACH_CHAT_RULES}\n\n"
-            f"---\n"
-            f"You are a {coach_type}. "
-            f"The athlete's goals: {', '.join(goals) if goals else 'general fitness'}. "
+            f"---\n\n"
+            f"{coach_profile}\n\n"
+            f"---\n\n"
+            f"## This Athlete\n"
+            f"Goals: {', '.join(goals) if goals else 'general fitness'}.\n"
             f"Background: {fitness_info}."
             f"{memory_section}"
         )
@@ -373,7 +404,6 @@ class AIViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['GET'], permission_classes=[SelfActionPermission])
     def token_status(self, request, pk=None):
         quota, _ = TokenQuota.objects.get_or_create(user_id=request.user.id)
-        quota.reset_if_expired()
 
         history = TokenPurchase.objects.filter(
             user_id=request.user.id

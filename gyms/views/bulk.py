@@ -1,8 +1,8 @@
 import json
+from django.db import transaction
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.test import APIRequestFactory, force_authenticate
 
 from .helpers import cur_template_num, next_template_num, to_err
 from .permissions import SelfActionPermission
@@ -53,85 +53,86 @@ class BulkTemplateViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=['POST'], permission_classes=[SelfActionPermission])
     def create_template(self, request):
-        print("Request template user: ", request.user)
-        factory = APIRequestFactory()
-        created_groups = []
-        user = request.user
-        tz = request.tz
+        """
+        Creates all template WorkoutGroups, Workouts, WorkoutItems, and
+        WorkoutStats in a single request using direct ORM calls inside one
+        atomic transaction.  This bypasses the per-group permission / rate-limit
+        checks that block free-tier users after the first WorkoutGroup.
+        """
+        from gyms.models import (
+            WorkoutGroups, Workouts, WorkoutItems, WorkoutNames, WorkoutStats,
+        )
+        from gyms.serializers import WorkoutGroupsCreateSerializer
 
+        user = request.user
         groups = request.data.get("template", [])
         if len(groups) < 1:
             return Response([])
 
-        template_name = groups[0]["group"]['template_name']
-        template_num = next_template_num(request.user, template_name)
-        for grp in groups:
-            group = {**grp["group"]}
+        template_name = groups[0]["group"]["template_name"]
+        template_num = next_template_num(user, template_name)
+        created_groups = []
 
-            group['template_num'] = template_num
-            group['creation_source'] = 'template'
+        try:
+            with transaction.atomic():
+                for grp in groups:
+                    group_data = {**grp["group"]}
+                    group_data["owner_id"] = str(user.id)
+                    group_data["owned_by_class"] = False
+                    group_data["template_num"] = template_num
+                    group_data["creation_source"] = "template"
+                    group_data["media_ids"] = "[]"
 
-            group_req = factory.post(
-                '/workoutGroups/',
-                group,
-                format='multipart'
+                    serializer = WorkoutGroupsCreateSerializer(data=group_data)
+                    serializer.is_valid(raise_exception=True)
+
+                    workout_group, newly_created = WorkoutGroups.objects.get_or_create(
+                        **serializer.validated_data
+                    )
+                    if not newly_created:
+                        continue
+
+                    created_groups.append(workout_group.id)
+
+                    for wk in grp.get("workouts", []):
+                        wk_data = {**wk["workout"], "group_id": workout_group.id}
+                        workout, _ = Workouts.objects.get_or_create(**wk_data)
+
+                        # Create WorkoutItems in bulk
+                        items_raw = wk.get("items", [])
+                        item_objs = []
+                        for item in items_raw:
+                            item_copy = {**item}
+                            # Remove fields that are set via FK objects
+                            item_copy.pop("id", None)
+                            item_copy.pop("workout", None)
+                            item_copy.pop("date", None)
+                            name_val = item_copy.pop("name")
+                            name_id = name_val["id"] if isinstance(name_val, dict) else name_val
+                            item_objs.append(WorkoutItems(
+                                **item_copy,
+                                workout=workout,
+                                name=WorkoutNames(id=name_id),
+                            ))
+                        if item_objs:
+                            WorkoutItems.objects.bulk_create(item_objs)
+
+                        # Create WorkoutStats
+                        tags = wk.get("tags", {})
+                        names = wk.get("names", {})
+                        WorkoutStats.objects.get_or_create(
+                            workout=workout,
+                            defaults={"tags": tags, "items": names},
+                        )
+
+        except Exception as e:
+            print("Error in bulk create_template: ", e)
+            return Response(
+                to_err(f"Failed to create template: {e}", exception=e),
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
             )
-
-            group_req.tz = tz
-            force_authenticate(group_req, user=user)
-
-            # Import here to avoid circular imports
-            from .workouts import WorkoutGroupsViewSet, WorkoutsViewSet
-            from .workout_items import WorkoutItemsViewSet
-
-            group_resp = WorkoutGroupsViewSet.as_view({"post": "create"})(group_req)
-
-            print(f"{group_resp.status_code=}")
-
-            if group_resp.status_code not in (status.HTTP_200_OK, status.HTTP_201_CREATED):
-                return group_resp
-
-            group_id = group_resp.data["id"]
-            created_groups.append(group_id)
-
-            print("Creating workouts for group: ", grp.get("workouts", []))
-            for wk in grp.get("workouts", []):
-                wk_payload = {**wk["workout"], "group": group_id}
-                workout_req = factory.post(
-                    '/workouts/',
-                    wk_payload,
-                    format='multipart'
-                )
-
-                force_authenticate(workout_req, user=user)
-                workout_req.tz = tz
-
-                wk_resp = WorkoutsViewSet.as_view({"post": "create"})(workout_req)
-                if wk_resp.status_code not in (status.HTTP_200_OK, status.HTTP_201_CREATED):
-                    return wk_resp
-
-                workout_id = wk_resp.data["id"]
-
-                items_payload = {
-                    "items": json.dumps(wk["items"]),
-                    "workout": workout_id,
-                    "workout_group": group_id,
-                    "tags": json.dumps(wk['tags']),
-                    "names": json.dumps(wk['names']),
-                }
-                items_req = factory.post(
-                    '/workoutItems/items/',
-                    items_payload,
-                    format='multipart'
-                )
-
-                force_authenticate(items_req, user=user)
-                items_req.tz = tz
-                items_resp = WorkoutItemsViewSet.as_view({"post": "items"})(items_req)
-                if items_resp.status_code not in (status.HTTP_200_OK, status.HTTP_201_CREATED):
-                    return items_resp
 
         return Response(
             {"created_groups": created_groups},
-            status=status.HTTP_201_CREATED
+            status=status.HTTP_201_CREATED,
         )

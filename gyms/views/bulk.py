@@ -1,11 +1,27 @@
 import json
+from datetime import datetime
 from django.db import transaction
+from django.utils import timezone
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from .helpers import cur_template_num, next_template_num, to_err
 from .permissions import SelfActionPermission
+
+
+def _parse_for_date(value):
+    """Parse a date string (YYYY-MM-DD) into a UTC-midnight-aware datetime,
+    matching UTCDateOnlyField behaviour."""
+    if isinstance(value, datetime):
+        dt = value
+    else:
+        dt = datetime.strptime(str(value), "%Y-%m-%d")
+    if timezone.is_naive(dt):
+        dt = timezone.make_aware(dt, timezone.utc)
+    return dt.astimezone(timezone.utc).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
 
 
 class BulkTemplateViewSet(viewsets.ViewSet):
@@ -62,7 +78,6 @@ class BulkTemplateViewSet(viewsets.ViewSet):
         from gyms.models import (
             WorkoutGroups, Workouts, WorkoutItems, WorkoutNames, WorkoutStats,
         )
-        from gyms.serializers import WorkoutGroupsCreateSerializer
 
         user = request.user
         groups = request.data.get("template", [])
@@ -76,18 +91,20 @@ class BulkTemplateViewSet(viewsets.ViewSet):
         try:
             with transaction.atomic():
                 for grp in groups:
-                    group_data = {**grp["group"]}
-                    group_data["owner_id"] = str(user.id)
-                    group_data["owned_by_class"] = False
-                    group_data["template_num"] = template_num
-                    group_data["creation_source"] = "template"
-                    group_data["media_ids"] = "[]"
-
-                    serializer = WorkoutGroupsCreateSerializer(data=group_data)
-                    serializer.is_valid(raise_exception=True)
-
+                    g = grp["group"]
                     workout_group, newly_created = WorkoutGroups.objects.get_or_create(
-                        **serializer.validated_data
+                        owner_id=str(user.id),
+                        owned_by_class=False,
+                        title=g["title"],
+                        for_date=_parse_for_date(g["for_date"]),
+                        defaults={
+                            "caption": g.get("caption", ""),
+                            "is_template": g.get("is_template", True),
+                            "template_name": g.get("template_name", ""),
+                            "template_num": template_num,
+                            "creation_source": "template",
+                            "media_ids": "[]",
+                        },
                     )
                     if not newly_created:
                         continue

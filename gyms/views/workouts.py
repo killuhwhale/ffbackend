@@ -101,7 +101,7 @@ class WorkoutGroupsViewSet(viewsets.ModelViewSet, WorkoutGroupsPermission):
         data['owned_by_class'] = jbool(data['owned_by_class'])
         title = data['title']
         for_date = data['for_date']
-        caption = data['caption']
+        caption = data.get('caption', "")
         owned_by_class = data['owned_by_class']
         owner_id = data['owner_id']
         workouts = json.loads(data['workouts'])

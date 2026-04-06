@@ -281,6 +281,13 @@ class WorkoutGroupsCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = WorkoutGroups
         fields = '__all__'
+        extra_kwargs = {
+            "caption": {
+                "required": False,
+                "allow_blank": True,
+                "default": "",
+            },
+        }
 
 
 class WorkoutGroupsHasCompletedSerializer(serializers.ModelSerializer):

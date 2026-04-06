@@ -705,3 +705,23 @@ class GymTestCase(TestCase):
             self.workoutgroup_b.for_date.isoformat(),
             "2026-03-17T00:00:00+00:00",
         )
+
+    def test_create_workout_group_without_caption(self):
+        res = self.req.post(
+            "/workoutGroups/",
+            {
+                "owner_id": self.user_a.id,
+                "owned_by_class": "False",
+                "title": "No Caption Test",
+                "for_date": "2026-03-17",
+                "creation_source": "manual",
+            },
+            HTTP_AUTHORIZATION=f"Bearer {self.jwt_token_a}",
+        )
+
+        self.assertEqual(res.status_code, 200)
+        body = json.loads(res.content.decode())
+        self.assertEqual(body["caption"], "")
+
+        workout_group = WorkoutGroups.objects.get(id=body["id"])
+        self.assertEqual(workout_group.caption, "")

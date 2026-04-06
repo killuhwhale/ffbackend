@@ -18,12 +18,14 @@ from gyms.serializers import (
     WorkoutGroupsAutoCompletedSerializer,
 )
 from .helpers import (
+    NON_MEMBER_LIMIT,
     WORKOUT_FILES,
     FILES_KINDS,
     delete_media,
     is_gym_class_owner,
     is_gym_owner,
     is_gymclass_coach,
+    is_member,
     jbool,
     to_data,
     to_err,
@@ -349,6 +351,21 @@ class WorkoutGroupsViewSet(viewsets.ModelViewSet, WorkoutGroupsPermission):
             elif not str(user_id) == str(workout_group.owner_id):
                 print("User is not owner")
                 return Response({"error": "User is not owner"})
+
+            # Free-tier users can only finish one workout group per day
+            if not is_member(request):
+                today = today_UTC(request)
+                finished_today = WorkoutGroups.objects.filter(
+                    owner_id=user_id,
+                    owned_by_class=False,
+                    finished=True,
+                    date__date=today,
+                ).count()
+                if finished_today >= NON_MEMBER_LIMIT:
+                    return Response(
+                        {"error": "Daily workout limit reached. Upgrade your membership to complete more workouts."},
+                        status=status.HTTP_429_TOO_MANY_REQUESTS,
+                    )
 
             workout_group.finished = True
             if workout_group.is_template:

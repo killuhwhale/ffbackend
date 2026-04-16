@@ -101,9 +101,13 @@ def _parse_chat_response(raw):
 # ── Token packages ─────────────────────────────────────────────────────────────
 # 1 credit ≈ 1 workout generation (~18k tokens) or ~8-10 coaching chat messages.
 #
+# These are now MONTHLY SUBSCRIPTIONS (not one-time credit packs).
+# On initial purchase and each renewal, the user's quota is topped off to the
+# tier's token amount (no rollover).
+#
 # Two purchase paths — keep these IDs in sync with stripeHooks/views.py:
-#   Mobile : Apple App Store / Google Play via RevenueCat (IAP)
-#   Web    : Stripe Checkout (one-time payment)
+#   Mobile : Apple App Store (iOS only) via RevenueCat subscription
+#   Web    : Stripe Checkout (subscription)
 TOKENS_PER_CREDIT = 18_000
 
 TOKEN_PACKAGES = [
@@ -111,12 +115,12 @@ TOKEN_PACKAGES = [
         "name":             "Starter",
         "credits":          5,
         "tokens":           5 * TOKENS_PER_CREDIT,   # 90,000
-        "price_usd":        3.99,
-        "description":      "5 AI Credits",
-        # Mobile IAP — create these in App Store Connect & Google Play Console
-        "apple_product_id":  "ai_credits_5",
-        "google_product_id": "ai_credits_5",
-        # Web — Stripe price ID (test mode)
+        "price_usd":        4.99,
+        "description":      "5 AI Credits / month",
+        # Mobile IAP subscription product IDs — configured in App Store Connect
+        "apple_product_id":  "credits_5",
+        "google_product_id": "credits_5",
+        # Web — Stripe price ID (recurring/subscription)
         "stripe_price_id":   "price_1TDsVQGjKlPKN3XK7wY16yQb",
     },
     {
@@ -124,9 +128,9 @@ TOKEN_PACKAGES = [
         "credits":          15,
         "tokens":           15 * TOKENS_PER_CREDIT,  # 270,000
         "price_usd":        9.99,
-        "description":      "15 AI Credits",
-        "apple_product_id":  "ai_credits_15",
-        "google_product_id": "ai_credits_15",
+        "description":      "15 AI Credits / month",
+        "apple_product_id":  "credits_15",
+        "google_product_id": "credits_15",
         "stripe_price_id":   "price_1TDsVQGjKlPKN3XKyGB2Vhft",
     },
     {
@@ -134,9 +138,9 @@ TOKEN_PACKAGES = [
         "credits":          35,
         "tokens":           35 * TOKENS_PER_CREDIT,  # 630,000
         "price_usd":        19.99,
-        "description":      "35 AI Credits",
-        "apple_product_id":  "ai_credits_35",
-        "google_product_id": "ai_credits_35",
+        "description":      "35 AI Credits / month",
+        "apple_product_id":  "credits_35",
+        "google_product_id": "credits_35",
         "stripe_price_id":   "price_1TDsVRGjKlPKN3XKDOWj1CQ8",
     },
 ]

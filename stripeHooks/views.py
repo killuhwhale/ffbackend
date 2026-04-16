@@ -15,31 +15,35 @@ from users.models import User as UserType
 from utils import get_env
 from gyms.models import TokenQuota, TokenPurchase
 
-# ── Subscription credit allowance ──────────────────────────────────────────────
-# Subscribers get 10 credits topped off on initial purchase and each renewal.
-# No rollover — if they have tokens remaining, we top off to this cap.
-SUB_CREDIT_CAP = 10 * 18_000  # 10 credits × 18,000 tokens/credit = 180,000
-
-# ── Credit pack definitions ────────────────────────────────────────────────────
+# ── Subscription credit tiers ──────────────────────────────────────────────────
+# These tiers are now MONTHLY SUBSCRIPTIONS (previously one-time IAP packs).
+# On INITIAL_PURCHASE and every RENEWAL, the user's quota is TOPPED OFF to the
+# tier's token amount — no rollover.
+#
 # Two purchase paths — keep these IDs in sync with gyms/views/ai.py TOKEN_PACKAGES.
 #
-#   Mobile path : App Store / Google Play → RevenueCat webhook → RC_CREDIT_PACKAGES
-#   Web path    : Stripe Checkout         → Stripe webhook     → STRIPE_CREDIT_PACKAGES
+#   Mobile path : App Store (iOS only) → RevenueCat webhook → RC_CREDIT_PACKAGES
+#   Web path    : Stripe Checkout      → Stripe webhook     → STRIPE_CREDIT_PACKAGES
 #
 # IMPORTANT: Stripe price IDs must NEVER be sent to or used by the mobile app.
 # Apple will reject apps that route IAP revenue outside their payment system.
 
 _CREDIT_PACKS = [
-    {"credits": 5,  "tokens": 90_000,  "price_usd": 3.99,
-     "apple_product_id": "ai_credits_5",   "google_product_id": "ai_credits_5",
+    {"credits": 5,  "tokens": 90_000,  "price_usd": 4.99,
+     "apple_product_id": "credits_5",   "google_product_id": "credits_5",
      "stripe_price_id":  "price_1TDsVQGjKlPKN3XK7wY16yQb"},
     {"credits": 15, "tokens": 270_000, "price_usd": 9.99,
-     "apple_product_id": "ai_credits_15",  "google_product_id": "ai_credits_15",
+     "apple_product_id": "credits_15",  "google_product_id": "credits_15",
      "stripe_price_id":  "price_1TDsVQGjKlPKN3XKyGB2Vhft"},
     {"credits": 35, "tokens": 630_000, "price_usd": 19.99,
-     "apple_product_id": "ai_credits_35",  "google_product_id": "ai_credits_35",
+     "apple_product_id": "credits_35",  "google_product_id": "credits_35",
      "stripe_price_id":  "price_1TDsVRGjKlPKN3XKDOWj1CQ8"},
 ]
+
+# Default top-off for generic/legacy subscriptions that don't match a credit tier
+# (e.g., the original Plus plan on web). Tier-specific subs look up their own
+# token amount from RC_CREDIT_PACKAGES / STRIPE_CREDIT_PACKAGES instead.
+SUB_CREDIT_CAP_DEFAULT = 10 * 18_000  # 10 credits = 180,000 tokens
 
 # Mobile: keyed by store-native product ID (RC webhook sends the store's own ID)
 RC_CREDIT_PACKAGES: dict = {}
@@ -330,7 +334,7 @@ class HookViewSet(viewsets.ViewSet):
                 exp_date = event.get("expiration_at_ms")
                 is_trial = event.get("is_trial_conversion", False)
                 period_type = event.get("period_type", "")
-                print(f"[RevenueCat] Sub event: {event_type=}, {period_type=}, {is_trial=}")
+                print(f"[RevenueCat] Sub event: {event_type=}, {period_type=}, {is_trial=}, {product_id=}")
 
                 user = get_user(user_id)
                 if user and exp_date:
@@ -347,11 +351,18 @@ class HookViewSet(viewsets.ViewSet):
                     logger.warning(msg)
                     print(msg)
 
-                # Top off subscriber credits (10 credits, no rollover)
+                # Top off subscriber credits based on the subscribed tier (no rollover)
                 if user_id:
+                    package = RC_CREDIT_PACKAGES.get(product_id)
+                    top_off = package["tokens"] if package else SUB_CREDIT_CAP_DEFAULT
                     quota, _ = TokenQuota.objects.get_or_create(user_id=user_id)
-                    quota.top_off_tokens(SUB_CREDIT_CAP)
-                    print(f"[RevenueCat] Topped off credits for {user_id=}, remaining={quota.remaining_tokens}")
+                    quota.top_off_tokens(top_off)
+                    if package:
+                        print(f"[RevenueCat] Topped off {package['credits']} credits "
+                              f"(tier={product_id}) for {user_id=}, remaining={quota.remaining_tokens}")
+                    else:
+                        print(f"[RevenueCat] Unknown sub product_id={product_id!r} — "
+                              f"applied default top-off, remaining={quota.remaining_tokens}")
 
             # ── Consumable credit pack ──────────────────────────────────────
             elif event_type == "NON_RENEWING_PURCHASE":
@@ -603,10 +614,17 @@ class HookViewSet(viewsets.ViewSet):
                                         user.save()
                                         print(f"Set sub_end_date for user={user.email} until {user.sub_end_date}")
 
-                                    # Top off subscriber credits (10 credits, no rollover)
+                                    # Tier-aware top-off: look up the price_id that was
+                                    # subscribed to and top off to that tier's tokens.
+                                    # Fall back to the default cap for legacy/generic subs.
+                                    price_id = (session.get('metadata') or {}).get('price_id', '')
+                                    credit_pack = STRIPE_CREDIT_PACKAGES.get(price_id)
+                                    top_off = credit_pack["tokens"] if credit_pack else SUB_CREDIT_CAP_DEFAULT
                                     quota, _ = TokenQuota.objects.get_or_create(user_id=str(user.id))
-                                    quota.top_off_tokens(SUB_CREDIT_CAP)
-                                    print(f"Topped off credits for user={user.email}, remaining={quota.remaining_tokens}")
+                                    quota.top_off_tokens(top_off)
+                                    tier = f"{credit_pack['credits']} credits" if credit_pack else "default"
+                                    print(f"Topped off {tier} for user={user.email}, "
+                                          f"remaining={quota.remaining_tokens}")
                                 except Exception as sub_err:
                                     print(f"Error retrieving subscription: {sub_err}")
                 except Exception as err:
@@ -675,10 +693,24 @@ class HookViewSet(viewsets.ViewSet):
                             user.save()
                             print(f"Updated sub_end_date for user={user.email} until {user.sub_end_date}")
 
-                            # Top off subscriber credits (10 credits, no rollover)
+                            # Tier-aware top-off: pull the price_id from the
+                            # subscription's first line item. Fall back to the
+                            # default cap for legacy/generic subs.
+                            price_id = ""
+                            try:
+                                items = (subscription.get('items') or {}).get('data') or []
+                                if items:
+                                    price_id = (items[0].get('price') or {}).get('id', '')
+                            except Exception:
+                                price_id = ""
+
+                            credit_pack = STRIPE_CREDIT_PACKAGES.get(price_id)
+                            top_off = credit_pack["tokens"] if credit_pack else SUB_CREDIT_CAP_DEFAULT
                             quota, _ = TokenQuota.objects.get_or_create(user_id=str(user.id))
-                            quota.top_off_tokens(SUB_CREDIT_CAP)
-                            print(f"Topped off credits for user={user.email}, remaining={quota.remaining_tokens}")
+                            quota.top_off_tokens(top_off)
+                            tier = f"{credit_pack['credits']} credits" if credit_pack else "default"
+                            print(f"Topped off {tier} for user={user.email}, "
+                                  f"remaining={quota.remaining_tokens}")
                 except Exception as err:
                     print(f"Error with customer.subscription.updated: {err}")
 

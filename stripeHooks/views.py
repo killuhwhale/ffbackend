@@ -351,14 +351,54 @@ class HookViewSet(viewsets.ViewSet):
                     logger.warning(msg)
                     print(msg)
 
-                # Top off subscriber credits based on the subscribed tier (no rollover)
+                # Hard-reset subscriber credits to the subscribed tier.
+                # We RESET (not top-off) so that:
+                #   - Downgrades work (15-credit → 5-credit actually reduces)
+                #   - Renewals reset the full monthly allowance
+                #   - No rollover from previous billing cycles
                 if user_id:
                     package = RC_CREDIT_PACKAGES.get(product_id)
-                    top_off = package["tokens"] if package else SUB_CREDIT_CAP_DEFAULT
                     quota, _ = TokenQuota.objects.get_or_create(user_id=user_id)
-                    quota.top_off_tokens(top_off)
+
                     if package:
-                        print(f"[RevenueCat] Topped off {package['credits']} credits "
+                        quota.remaining_tokens = package["tokens"]
+                    else:
+                        quota.top_off_tokens(SUB_CREDIT_CAP_DEFAULT)
+
+                    # Set reset_at to the next billing date so the UI shows
+                    # when credits will refresh.
+                    if exp_date:
+                        quota.reset_at = datetime.fromtimestamp(exp_date // 1000, tz=timezone.utc)
+                    else:
+                        quota.reset_at = datetime.now(tz=timezone.utc) + timedelta(days=30)
+                    quota.save()
+
+                    # Record the purchase for analytics using RC's reported price
+                    # (RC's `price` field is normalized to USD).
+                    if package:
+                        transaction_ref = event.get("transaction_id", "")
+                        rc_price_usd = event.get("price")
+                        method = TokenPurchase.GOOGLE if store == "PLAY_STORE" else TokenPurchase.APPLE
+
+                        already_recorded = (
+                            transaction_ref
+                            and TokenPurchase.objects.filter(transaction_ref=transaction_ref).exists()
+                        )
+                        if already_recorded:
+                            print(f"[RevenueCat] Duplicate sub purchase skipped: {transaction_ref=}")
+                        else:
+                            TokenPurchase.objects.create(
+                                user_id=user_id,
+                                package_id=product_id,
+                                tokens_added=package["tokens"],
+                                price_paid_usd=rc_price_usd if rc_price_usd is not None else 0,
+                                method=method,
+                                transaction_ref=transaction_ref,
+                            )
+                            print(f"[RevenueCat] Recorded {event_type} {transaction_ref=} "
+                                  f"@ ${rc_price_usd} for {product_id=}")
+
+                        print(f"[RevenueCat] Reset to {package['credits']} credits "
                               f"(tier={product_id}) for {user_id=}, remaining={quota.remaining_tokens}")
                     else:
                         print(f"[RevenueCat] Unknown sub product_id={product_id!r} — "
@@ -425,12 +465,19 @@ class HookViewSet(viewsets.ViewSet):
                 print(f"[RevenueCat] EXPIRATION: {user_id=}, {expiration_reason=}, {exp_date=}, {product_id=}")
                 logger.info(f"[RevenueCat] EXPIRATION: {user_id=}, {expiration_reason=}")
 
-                # Sub expired — set sub_end_date to now to revoke access
+                # Sub expired — revoke access and zero out subscription credits
                 user = get_user(user_id)
                 if user:
                     user.sub_end_date = datetime.now(tz=timezone.utc)
                     user.save()
                     print(f"[RevenueCat] Expired sub for {user_id=}")
+
+                if user_id:
+                    quota, _ = TokenQuota.objects.get_or_create(user_id=user_id)
+                    prev = quota.remaining_tokens
+                    quota.remaining_tokens = 0
+                    quota.save()
+                    print(f"[RevenueCat] Zeroed credits for {user_id=} (was {prev})")
 
             # ── Billing issue ───────────────────────────────────────────────
             elif event_type == "BILLING_ISSUE":
@@ -614,17 +661,41 @@ class HookViewSet(viewsets.ViewSet):
                                         user.save()
                                         print(f"Set sub_end_date for user={user.email} until {user.sub_end_date}")
 
-                                    # Tier-aware top-off: look up the price_id that was
-                                    # subscribed to and top off to that tier's tokens.
-                                    # Fall back to the default cap for legacy/generic subs.
+                                    # Hard-reset credits to the subscribed tier.
+                                    # Fall back to top-off for legacy/generic subs.
                                     price_id = (session.get('metadata') or {}).get('price_id', '')
                                     credit_pack = STRIPE_CREDIT_PACKAGES.get(price_id)
-                                    top_off = credit_pack["tokens"] if credit_pack else SUB_CREDIT_CAP_DEFAULT
                                     quota, _ = TokenQuota.objects.get_or_create(user_id=str(user.id))
-                                    quota.top_off_tokens(top_off)
+                                    if credit_pack:
+                                        quota.remaining_tokens = credit_pack["tokens"]
+                                    else:
+                                        quota.top_off_tokens(SUB_CREDIT_CAP_DEFAULT)
+                                    if period_end:
+                                        quota.reset_at = unix_to_datetime(period_end)
+                                    quota.save()
                                     tier = f"{credit_pack['credits']} credits" if credit_pack else "default"
-                                    print(f"Topped off {tier} for user={user.email}, "
+                                    print(f"Reset {tier} for user={user.email}, "
                                           f"remaining={quota.remaining_tokens}")
+
+                                    # Record purchase using actual Stripe-charged amount
+                                    # (amount_total is in minor units of session.currency).
+                                    if credit_pack:
+                                        session_id = session.get('id', '')
+                                        if session_id and not TokenPurchase.objects.filter(
+                                            transaction_ref=session_id
+                                        ).exists():
+                                            amount_minor = session.get('amount_total') or 0
+                                            price_paid = (amount_minor / 100.0) if amount_minor else 0
+                                            TokenPurchase.objects.create(
+                                                user_id=str(user.id),
+                                                package_id=price_id,
+                                                tokens_added=credit_pack["tokens"],
+                                                price_paid_usd=price_paid,
+                                                method=TokenPurchase.STRIPE,
+                                                transaction_ref=session_id,
+                                            )
+                                            print(f"Recorded Stripe sub purchase {session_id=} "
+                                                  f"@ ${price_paid}")
                                 except Exception as sub_err:
                                     print(f"Error retrieving subscription: {sub_err}")
                 except Exception as err:
@@ -655,13 +726,40 @@ class HookViewSet(viewsets.ViewSet):
                 invoice = event_data
                 print(f"Invoice event: ", invoice)
                 user = get_user_by_customer_id(invoice)
-                sub_start = invoice['lines']['data'][0]['period']['start']
-                sub_end = invoice['lines']['data'][0]['period']['end']
                 if not user:
                     print(f"User not found, user is None.")
                     return JsonResponse({"success": False})
-                user.sub_end_date = datetime.fromtimestamp(sub_end)
-                user.save()
+
+                lines = (invoice.get('lines') or {}).get('data') or []
+                first_line = lines[0] if lines else {}
+
+                sub_end = first_line.get('period', {}).get('end')
+                if sub_end:
+                    user.sub_end_date = datetime.fromtimestamp(sub_end, tz=timezone.utc)
+                    user.save()
+
+                # On renewals, record the TokenPurchase using Stripe's actual
+                # amount_paid. The initial purchase is recorded by
+                # checkout.session.completed, so we skip `subscription_create`.
+                billing_reason = invoice.get('billing_reason', '')
+                price_id = (first_line.get('price') or {}).get('id', '')
+                credit_pack = STRIPE_CREDIT_PACKAGES.get(price_id)
+
+                if credit_pack and billing_reason == 'subscription_cycle':
+                    invoice_id = invoice.get('id', '')
+                    if invoice_id and not TokenPurchase.objects.filter(transaction_ref=invoice_id).exists():
+                        amount_minor = invoice.get('amount_paid') or 0
+                        price_paid = (amount_minor / 100.0) if amount_minor else 0
+                        TokenPurchase.objects.create(
+                            user_id=str(user.id),
+                            package_id=price_id,
+                            tokens_added=credit_pack["tokens"],
+                            price_paid_usd=price_paid,
+                            method=TokenPurchase.STRIPE,
+                            transaction_ref=invoice_id,
+                        )
+                        print(f"Recorded Stripe renewal {invoice_id=} @ ${price_paid} "
+                              f"for user={user.email}")
 
             # ── invoice.payment_failed ────────────────────────────────────────
             elif event_type == 'invoice.payment_failed':
@@ -705,11 +803,15 @@ class HookViewSet(viewsets.ViewSet):
                                 price_id = ""
 
                             credit_pack = STRIPE_CREDIT_PACKAGES.get(price_id)
-                            top_off = credit_pack["tokens"] if credit_pack else SUB_CREDIT_CAP_DEFAULT
                             quota, _ = TokenQuota.objects.get_or_create(user_id=str(user.id))
-                            quota.top_off_tokens(top_off)
+                            if credit_pack:
+                                quota.remaining_tokens = credit_pack["tokens"]
+                            else:
+                                quota.top_off_tokens(SUB_CREDIT_CAP_DEFAULT)
+                            quota.reset_at = unix_to_datetime(period_end)
+                            quota.save()
                             tier = f"{credit_pack['credits']} credits" if credit_pack else "default"
-                            print(f"Topped off {tier} for user={user.email}, "
+                            print(f"Reset {tier} for user={user.email}, "
                                   f"remaining={quota.remaining_tokens}")
                 except Exception as err:
                     print(f"Error with customer.subscription.updated: {err}")
@@ -728,6 +830,13 @@ class HookViewSet(viewsets.ViewSet):
                             user.sub_end_date = datetime.now(tz=timezone.utc) - timedelta(days=1)
                             user.save()
                             print(f"Expired subscription for user={user.email}")
+
+                            # Zero out subscription credits
+                            quota, _ = TokenQuota.objects.get_or_create(user_id=str(user.id))
+                            prev = quota.remaining_tokens
+                            quota.remaining_tokens = 0
+                            quota.save()
+                            print(f"Zeroed credits for user={user.email} (was {prev})")
                 except Exception as err:
                     print(f"Error with customer.subscription.deleted: {err}")
 

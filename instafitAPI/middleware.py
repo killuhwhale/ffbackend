@@ -67,6 +67,7 @@ class JWTMiddleware:
                 expected_token = cenv("REVENUECAT_TOKEN")
                 # Support both "Bearer <token>" and raw token formats
                 provided_token = auth_header.replace("Bearer ", "", 1) if auth_header.startswith("Bearer ") else auth_header
+                print("TOkens: ", f"{provided_token=}", f"{expected_token=}")
                 if expected_token and provided_token == expected_token:
                     print("RevenueCat access granted..")
                     response = self.get_response(request)

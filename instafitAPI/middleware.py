@@ -2,31 +2,31 @@ from django.contrib.auth import get_user_model
 from django.contrib.gis.geoip2 import GeoIP2
 from django.http import JsonResponse
 import pytz
-from instafitAPI.settings  import JWT_KEY
+from instafitAPI.settings  import JWT_KEY, cenv
 from jwt import decode, ExpiredSignatureError
 from pytz import timezone
 import logging
 
-import environ
-env = environ.Env(
-    # set casting, default value
-    DEBUG=(bool, False),
-    SPACES_ENDPOINT_FULL=(str, ""),
-    SPACES_ENDPOINT_EDGE=(str, ""),
-    SPACES_KEY=(str, ""),
-    SPACES_SECRET=(str, ""),
-    BUCKET=(str, ""),
-    SENDGRID_API_KEY=(str, ""),
-    SENDGRIPD_FROM_EMAIL=(str, ""),
-    SECRET_KEY=(str, ""),
-    DEV_DB_NAME=(str, ""),
-    DEV_DB_USER=(str, ""),
-    DEV_DB_PASS=(str, ""),
-    DJANGO_ALLOWED_HOSTS=(str, "127.0.0.1,localhost"),
-    RUN_ENV=(str, "dev"),
-    REVENUECAT_TOKEN=(str, ""),
-)
-environ.Env.read_env()
+# import environ
+# env = environ.Env(
+#     # set casting, default value
+#     DEBUG=(bool, False),
+#     SPACES_ENDPOINT_FULL=(str, ""),
+#     SPACES_ENDPOINT_EDGE=(str, ""),
+#     SPACES_KEY=(str, ""),
+#     SPACES_SECRET=(str, ""),
+#     BUCKET=(str, ""),
+#     SENDGRID_API_KEY=(str, ""),
+#     SENDGRIPD_FROM_EMAIL=(str, ""),
+#     SECRET_KEY=(str, ""),
+#     DEV_DB_NAME=(str, ""),
+#     DEV_DB_USER=(str, ""),
+#     DEV_DB_PASS=(str, ""),
+#     DJANGO_ALLOWED_HOSTS=(str, "127.0.0.1,localhost"),
+#     RUN_ENV=(str, "dev"),
+#     REVENUECAT_TOKEN=(str, ""),
+# )
+# environ.Env.read_env()
 
 User =  get_user_model()
 logger = logging.getLogger(__name__)
@@ -64,7 +64,7 @@ class JWTMiddleware:
                 # return JsonResponse({'error': f'Invalid access token, route not permitted '}, status=401)
             elif request.path == "/hooks/revenuecat/":
                 auth_header = request.META.get('HTTP_AUTHORIZATION', '')
-                expected_token = env("REVENUECAT_TOKEN")
+                expected_token = cenv("REVENUECAT_TOKEN")
                 # Support both "Bearer <token>" and raw token formats
                 provided_token = auth_header.replace("Bearer ", "", 1) if auth_header.startswith("Bearer ") else auth_header
                 if expected_token and provided_token == expected_token:

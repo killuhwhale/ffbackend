@@ -24,7 +24,7 @@ with open("gyms/create_workout_schema.json") as f:
 
 # Initialize the Anthropic client
 claude_client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
-genai.configure(api_key=settings.GEMINI_API_KEY)
+# genai.configure(api_key=settings.GEMINI_API_KEY) # Will revisit in the future
 
 tools = [
     {
@@ -37,7 +37,8 @@ tools = [
     }
 ]
 
-client = OpenAI(api_key=settings.OPENAI_API_KEY)
+# client = OpenAI(api_key=settings.OPENAI_API_KEY) # Will revisit in the future
+client = None
 
 
 def generate_workout_with_claude(claude_client, base_schema, max_tokens, prompt, scheme_type_text, userMaxes, lastWorkoutGroups) -> dict:

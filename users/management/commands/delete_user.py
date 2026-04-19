@@ -4,7 +4,7 @@ from django.db import transaction
 from django.db.models import Q
 from rest_framework.authtoken.models import Token
 
-from gyms.models import ResetPasswords, WorkoutGroups
+from gyms.models import ResetPasswords, TokenQuota, WorkoutGroups
 from users.models import ConfirmationEmailCodes
 
 
@@ -63,7 +63,7 @@ class Command(BaseCommand):
             return
 
         dry_run = options["dry_run"]
-        total = {"users": 0, "wg": 0, "tokens": 0, "reset": 0, "confirm": 0}
+        total = {"users": 0, "wg": 0, "tokens": 0, "reset": 0, "confirm": 0, "quota": 0}
 
         self.stdout.write(f"Found {len(users)} user(s) to delete:")
         for user in users:
@@ -71,9 +71,10 @@ class Command(BaseCommand):
             tok_c = Token.objects.filter(user_id=user.id).count()
             rst_c = ResetPasswords.objects.filter(email=user.email).count()
             cnf_c = ConfirmationEmailCodes.objects.filter(email=user.email).count()
+            quota_c = TokenQuota.objects.filter(user_id=str(user.id)).count()
             self.stdout.write(
                 f"  id={user.id} email={user.email} "
-                f"(wg={wg_c}, tokens={tok_c}, reset={rst_c}, confirm={cnf_c})"
+                f"(wg={wg_c}, tokens={tok_c}, reset={rst_c}, confirm={cnf_c}, quota={quota_c})"
             )
 
         if dry_run:
@@ -97,11 +98,13 @@ class Command(BaseCommand):
                 token_qs = Token.objects.filter(user_id=user.id)
                 reset_qs = ResetPasswords.objects.filter(email=user.email)
                 confirm_qs = ConfirmationEmailCodes.objects.filter(email=user.email)
+                quota_qs = TokenQuota.objects.filter(user_id=str(user.id))
 
                 wg_d, _ = wg_qs.delete()
                 tok_d, _ = token_qs.delete()
                 rst_d, _ = reset_qs.delete()
                 cnf_d, _ = confirm_qs.delete()
+                quota_d, _ = quota_qs.delete()
                 user.delete()
 
                 total["users"] += 1
@@ -109,9 +112,11 @@ class Command(BaseCommand):
                 total["tokens"] += tok_d
                 total["reset"] += rst_d
                 total["confirm"] += cnf_d
+                total["quota"] += quota_d
 
         self.stdout.write(self.style.SUCCESS(
             f"Deleted {total['users']} user(s) "
             f"(workout_groups={total['wg']}, tokens={total['tokens']}, "
-            f"reset={total['reset']}, confirm={total['confirm']})."
+            f"reset={total['reset']}, confirm={total['confirm']}, "
+            f"quota={total['quota']})."
         ))

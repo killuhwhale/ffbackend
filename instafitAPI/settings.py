@@ -216,6 +216,7 @@ if os.getenv("USER") == "killuh" and len(sys.argv) > 1 and sys.argv[1] != 'colle
         "default": dj_database_url.parse(cenv("DATABASE_URL")),
     }
     BASE_URL = 'https://reptrackrr.com/ffapi'
+    BASE_URL = 'https://api.liftl0g.com/'
 elif os.getenv("USER") == "localdocker" and cenv("RUN_ENV") == "production":
     DATABASES = {
         "default":  {
@@ -229,6 +230,7 @@ elif os.getenv("USER") == "localdocker" and cenv("RUN_ENV") == "production":
     }
     # BASE_URL = "http://localhost:8000"
     BASE_URL = 'https://reptrackrr.com/ffapi'
+    BASE_URL = 'https://api.liftl0g.com/'
 elif os.getenv("USER") == "localdocker" and cenv("RUN_ENV") == "dev":
     DATABASES = {
         "default":  {
@@ -241,6 +243,7 @@ elif os.getenv("USER") == "localdocker" and cenv("RUN_ENV") == "dev":
         }
     }
     BASE_URL = 'https://reptrackrr.com/ffapi'
+    BASE_URL = 'https://api.liftl0g.com/'
 elif os.getenv("USER") == "killuh" or os.getenv("USER") == "chrisandaya":
     DATABASES = {
         "default":  {

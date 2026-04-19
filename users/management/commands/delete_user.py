@@ -13,8 +13,8 @@ User = get_user_model()
 
 class Command(BaseCommand):
     help = (
-        "Testing utility: delete a user and all associated data "
-        "(workout groups they own, auth tokens, reset-password + confirmation "
+        "Testing utility: delete a user (or all users) and associated data "
+        "(owned workout groups, auth tokens, reset-password + confirmation "
         "codes, then the user row). Not intended for production use."
     )
 
@@ -22,6 +22,16 @@ class Command(BaseCommand):
         group = parser.add_mutually_exclusive_group(required=True)
         group.add_argument("--email", type=str, help="Email of user to delete")
         group.add_argument("--user-id", type=int, help="ID of user to delete")
+        group.add_argument(
+            "--all",
+            action="store_true",
+            help="Delete ALL users (excludes superusers/staff unless --include-staff).",
+        )
+        parser.add_argument(
+            "--include-staff",
+            action="store_true",
+            help="With --all, also delete staff/superuser accounts.",
+        )
         parser.add_argument(
             "--dry-run",
             action="store_true",
@@ -34,47 +44,74 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        email = options.get("email")
-        user_id = options.get("user_id")
+        if options["all"]:
+            users_qs = User.objects.all()
+            if not options["include_staff"]:
+                users_qs = users_qs.filter(is_staff=False, is_superuser=False)
+            users = list(users_qs)
+        else:
+            email = options.get("email")
+            user_id = options.get("user_id")
+            try:
+                user = User.objects.get(email=email) if email else User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                raise CommandError(f"No user found for email={email!r} user_id={user_id!r}")
+            users = [user]
+
+        if not users:
+            self.stdout.write(self.style.WARNING("No matching users."))
+            return
+
         dry_run = options["dry_run"]
+        total = {"users": 0, "wg": 0, "tokens": 0, "reset": 0, "confirm": 0}
 
-        try:
-            user = User.objects.get(email=email) if email else User.objects.get(id=user_id)
-        except User.DoesNotExist:
-            raise CommandError(f"No user found for email={email!r} user_id={user_id!r}")
-
-        wg_qs = WorkoutGroups.objects.filter(
-            Q(owner_id=user.id, owned_by_class=False)
-        )
-        token_qs = Token.objects.filter(user_id=user.id)
-        reset_qs = ResetPasswords.objects.filter(email=user.email)
-        confirm_qs = ConfirmationEmailCodes.objects.filter(email=user.email)
-
-        self.stdout.write(f"User: id={user.id} email={user.email}")
-        self.stdout.write(f"  WorkoutGroups (owned, not class): {wg_qs.count()}")
-        self.stdout.write(f"  Auth tokens:                      {token_qs.count()}")
-        self.stdout.write(f"  ResetPasswords rows:              {reset_qs.count()}")
-        self.stdout.write(f"  ConfirmationEmailCodes rows:      {confirm_qs.count()}")
+        self.stdout.write(f"Found {len(users)} user(s) to delete:")
+        for user in users:
+            wg_c = WorkoutGroups.objects.filter(Q(owner_id=user.id, owned_by_class=False)).count()
+            tok_c = Token.objects.filter(user_id=user.id).count()
+            rst_c = ResetPasswords.objects.filter(email=user.email).count()
+            cnf_c = ConfirmationEmailCodes.objects.filter(email=user.email).count()
+            self.stdout.write(
+                f"  id={user.id} email={user.email} "
+                f"(wg={wg_c}, tokens={tok_c}, reset={rst_c}, confirm={cnf_c})"
+            )
 
         if dry_run:
             self.stdout.write(self.style.WARNING("Dry run — no changes made."))
             return
 
         if not options["yes"]:
-            answer = input(f"Delete user {user.email} and the above data? [y/N]: ")
+            prompt = (
+                f"Delete ALL {len(users)} users and associated data? "
+                if options["all"]
+                else f"Delete user {users[0].email}? "
+            )
+            answer = input(prompt + "[y/N]: ")
             if answer.strip().lower() not in ("y", "yes"):
                 self.stdout.write("Aborted.")
                 return
 
         with transaction.atomic():
-            wg_deleted, _ = wg_qs.delete()
-            token_deleted, _ = token_qs.delete()
-            reset_deleted, _ = reset_qs.delete()
-            confirm_deleted, _ = confirm_qs.delete()
-            user.delete()
+            for user in users:
+                wg_qs = WorkoutGroups.objects.filter(Q(owner_id=user.id, owned_by_class=False))
+                token_qs = Token.objects.filter(user_id=user.id)
+                reset_qs = ResetPasswords.objects.filter(email=user.email)
+                confirm_qs = ConfirmationEmailCodes.objects.filter(email=user.email)
+
+                wg_d, _ = wg_qs.delete()
+                tok_d, _ = token_qs.delete()
+                rst_d, _ = reset_qs.delete()
+                cnf_d, _ = confirm_qs.delete()
+                user.delete()
+
+                total["users"] += 1
+                total["wg"] += wg_d
+                total["tokens"] += tok_d
+                total["reset"] += rst_d
+                total["confirm"] += cnf_d
 
         self.stdout.write(self.style.SUCCESS(
-            f"Deleted user {user.email} "
-            f"(workout_groups={wg_deleted}, tokens={token_deleted}, "
-            f"reset={reset_deleted}, confirm={confirm_deleted})."
+            f"Deleted {total['users']} user(s) "
+            f"(workout_groups={total['wg']}, tokens={total['tokens']}, "
+            f"reset={total['reset']}, confirm={total['confirm']})."
         ))

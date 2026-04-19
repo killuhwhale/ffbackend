@@ -69,7 +69,7 @@ print(f"{GEMINI_API_KEY=}")
 
 ALLOWED_HOSTS = cenv("DJANGO_ALLOWED_HOSTS",
                           "127.0.0.1,localhost").split(",")
-ALLOWED_HOSTS.append("neoorthodox-supersingular-erlene.ngrok-free.dev")
+ALLOWED_HOSTS.append("api.liftl0g.com")
 ALLOWED_HOSTS.append("192.168.68.55")
 print(f"{ALLOWED_HOSTS=}")
 

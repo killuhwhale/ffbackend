@@ -54,6 +54,10 @@ class JWTMiddleware:
 
     def __call__(self, request):
         print(f"middleware req: {request.method=}, {request.path=} ")
+        # Let CORS preflight requests through — they never carry an Authorization
+        # header, so JWT checks would always 401 them and break the browser.
+        if request.method == "OPTIONS":
+            return self.get_response(request)
         # Allow requests to endpoints without auth token
         if request.path == "/":
             return JsonResponse({'data': f'Hello world {request.path}'}, status=200)

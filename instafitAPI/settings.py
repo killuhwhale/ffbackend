@@ -113,6 +113,7 @@ SIMPLE_JWT = {
 # Application definition
 
 INSTALLED_APPS = [
+    'corsheaders',
     'rest_framework',
     'rest_framework.authtoken',
     # 'django.contrib.admin',
@@ -163,6 +164,10 @@ CACHES = {
 }
 
 MIDDLEWARE = [
+    # CorsMiddleware must be as high as possible — it needs to run before
+    # CommonMiddleware/our own middleware so it can stamp CORS headers on
+    # every response (including 4xx/5xx) and short-circuit OPTIONS preflights.
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     # 'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -175,6 +180,13 @@ MIDDLEWARE = [
     'instafitAPI.middleware.TzMiddleware',
     'instafitAPI.middleware.LogMiddleware',
 ]
+
+CORS_ALLOWED_ORIGINS = [
+    "https://liftl0g.com",
+    "https://www.liftl0g.com",
+]
+CORS_ALLOW_CREDENTIALS = True
+
 AUTHENTICATION_BACKENDS = {
     'users.authBackend.EmailAuth'
 }

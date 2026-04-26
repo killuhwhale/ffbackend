@@ -14,49 +14,7 @@ from instafitAPI.settings import env
 from users.models import User as UserType
 from utils import get_env
 from gyms.models import TokenQuota, TokenPurchase
-
-# ── Subscription credit tiers ──────────────────────────────────────────────────
-# These tiers are now MONTHLY SUBSCRIPTIONS (previously one-time IAP packs).
-# On INITIAL_PURCHASE and every RENEWAL, the user's quota is TOPPED OFF to the
-# tier's token amount — no rollover.
-#
-# Two purchase paths — keep these IDs in sync with gyms/views/ai.py TOKEN_PACKAGES.
-#
-#   Mobile path : App Store (iOS only) → RevenueCat webhook → RC_CREDIT_PACKAGES
-#   Web path    : Stripe Checkout      → Stripe webhook     → STRIPE_CREDIT_PACKAGES
-#
-# IMPORTANT: Stripe price IDs must NEVER be sent to or used by the mobile app.
-# Apple will reject apps that route IAP revenue outside their payment system.
-
-_CREDIT_PACKS = [
-    {"credits": 5,  "tokens": 90_000,  "price_usd": 4.99,
-     "apple_product_id": "credits_5",   "google_product_id": "credits_5",
-     "stripe_price_id":  "price_1TDsVQGjKlPKN3XK7wY16yQb"},
-    {"credits": 15, "tokens": 270_000, "price_usd": 9.99,
-     "apple_product_id": "credits_15",  "google_product_id": "credits_15",
-     "stripe_price_id":  "price_1TDsVQGjKlPKN3XKyGB2Vhft"},
-    {"credits": 35, "tokens": 630_000, "price_usd": 19.99,
-     "apple_product_id": "credits_35",  "google_product_id": "credits_35",
-     "stripe_price_id":  "price_1TDsVRGjKlPKN3XKDOWj1CQ8"},
-]
-
-# Default top-off for generic/legacy subscriptions that don't match a credit tier
-# (e.g., the original Plus plan on web). Tier-specific subs look up their own
-# token amount from RC_CREDIT_PACKAGES / STRIPE_CREDIT_PACKAGES instead.
-SUB_CREDIT_CAP_DEFAULT = 10 * 18_000  # 10 credits = 180,000 tokens
-
-# Mobile: keyed by store-native product ID (RC webhook sends the store's own ID)
-RC_CREDIT_PACKAGES: dict = {}
-for _pack in _CREDIT_PACKS:
-    _entry = {"credits": _pack["credits"], "tokens": _pack["tokens"], "price_usd": _pack["price_usd"]}
-    RC_CREDIT_PACKAGES[_pack["apple_product_id"]]  = _entry
-    RC_CREDIT_PACKAGES[_pack["google_product_id"]] = _entry
-
-# Web: keyed by Stripe price ID — used in checkout.session.completed webhook
-STRIPE_CREDIT_PACKAGES = {
-    _pack["stripe_price_id"]: {"credits": _pack["credits"], "tokens": _pack["tokens"], "price_usd": _pack["price_usd"]}
-    for _pack in _CREDIT_PACKS
-}
+from gyms.credit_packs import RC_CREDIT_PACKAGES, STRIPE_CREDIT_PACKAGES, SUB_CREDIT_CAP_DEFAULT
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -160,23 +118,21 @@ class HookViewSet(viewsets.ViewSet):
 
     # ── POST /hooks/create-checkout/ ─────────────────────────────────────────
 
-    @action(detail=False, methods=['POST'], permission_classes=[])
+    @action(detail=False, methods=['POST'], permission_classes=[], url_path=r'create[-_]checkout')
     def create_checkout(self, request, pk=None):
         """
         Create a Stripe Checkout Session.
 
         Body params:
-          price_id    — Stripe price ID (defaults to STRIPE_PRICE_ID / Plus plan)
+          price_id    — Stripe price ID (defaults to STRIPE_PRICE_ID / No-Ads plan)
           success_url — redirect on success (required)
           cancel_url  — redirect on cancel (required)
           email       — pre-fill checkout email (optional)
-          mode        — "subscription" or "payment" (auto-detected from price if omitted)
         """
         price_id    = request.data.get("price_id") or settings.STRIPE_PRICE_ID
         success_url = request.data.get("success_url", "").strip()
         cancel_url  = request.data.get("cancel_url", "").strip()
         email       = request.data.get("email", "").strip().lower()
-        mode        = request.data.get("mode", "").strip()
 
         if not success_url or not cancel_url:
             return JsonResponse(
@@ -184,9 +140,7 @@ class HookViewSet(viewsets.ViewSet):
                 status=400,
             )
 
-        # Auto-detect mode: Pro Plan is a one-time payment, everything else is subscription
-        if not mode:
-            mode = "payment" if price_id == settings.STRIPE_PRICE_ID_PRO else "subscription"
+        mode = "subscription"
 
         # Link checkout to the user's verified Stripe customer
         customer_id = None
@@ -205,8 +159,7 @@ class HookViewSet(viewsets.ViewSet):
                 "cancel_url": cancel_url,
                 "metadata": {"source": "reptrackrr-web", "price_id": price_id},
             }
-            if mode == "subscription":
-                params["allow_promotion_codes"] = True
+            params["allow_promotion_codes"] = True
 
             if customer_id:
                 params["customer"] = customer_id
@@ -226,7 +179,7 @@ class HookViewSet(viewsets.ViewSet):
 
     # ── POST /hooks/customer-portal/ ─────────────────────────────────────────
 
-    @action(detail=False, methods=['POST'], permission_classes=[])
+    @action(detail=False, methods=['POST'], permission_classes=[], url_path=r'customer[-_]portal')
     def customer_portal(self, request, pk=None):
         """
         Generate a Stripe Customer Portal URL.
@@ -268,7 +221,7 @@ class HookViewSet(viewsets.ViewSet):
 
     # ── GET /hooks/session-status/ ────────────────────────────────────────────
 
-    @action(detail=False, methods=['GET'], permission_classes=[])
+    @action(detail=False, methods=['GET'], permission_classes=[], url_path=r'session[-_]status')
     def session_status(self, request, pk=None):
         """
         Check the status of a Checkout Session (called from /success page).
@@ -624,80 +577,48 @@ class HookViewSet(viewsets.ViewSet):
                             user.save(update_fields=["customer_id"])
                             print(f"Updated customer_id={customer_id} for user={user.email}")
 
-                        session_mode = session.get('mode')
+                        # All plans are subscriptions — set sub_end_date and credit pack if applicable
+                        if subscription_id:
+                            try:
+                                sub = stripe.Subscription.retrieve(subscription_id)
+                                period_end = sub.get('current_period_end')
+                                if period_end:
+                                    user.sub_end_date = unix_to_datetime(period_end)
+                                    user.save()
+                                    print(f"Set sub_end_date for user={user.email} until {user.sub_end_date}")
 
-                        if session_mode == 'payment':
-                            # One-time purchase — check if it's a credit pack
-                            price_id    = (session.get('metadata') or {}).get('price_id', '')
-                            session_id  = session.get('id', '')
-                            credit_pack = STRIPE_CREDIT_PACKAGES.get(price_id)
-                            if credit_pack:
-                                if session_id and TokenPurchase.objects.filter(transaction_ref=session_id).exists():
-                                    print(f"Duplicate Stripe credit purchase skipped: {session_id=}")
-                                else:
-                                    quota, _ = TokenQuota.objects.get_or_create(user_id=str(user.id))
-                                    quota.add_tokens(credit_pack["tokens"])
-                                    TokenPurchase.objects.create(
-                                        user_id=str(user.id),
-                                        package_id=price_id,
-                                        tokens_added=credit_pack["tokens"],
-                                        price_paid_usd=credit_pack["price_usd"],
-                                        method=TokenPurchase.STRIPE,
-                                        transaction_ref=session_id,
-                                    )
-                                    print(f"Credited {credit_pack['tokens']} tokens ({credit_pack['credits']} credits) "
-                                          f"via Stripe to user={user.email}")
-                            else:
-                                print(f"One-time checkout completed but no credit pack matched price_id={price_id!r}")
+                                price_id = (session.get('metadata') or {}).get('price_id', '')
+                                session_id = session.get('id', '')
+                                credit_pack = STRIPE_CREDIT_PACKAGES.get(price_id)
+                                quota, _ = TokenQuota.objects.get_or_create(user_id=str(user.id))
 
-                        elif session_mode == 'subscription':
-                            # Subscription checkout — set sub_end_date
-                            if subscription_id:
-                                try:
-                                    sub = stripe.Subscription.retrieve(subscription_id)
-                                    period_end = sub.get('current_period_end')
-                                    if period_end:
-                                        user.sub_end_date = unix_to_datetime(period_end)
-                                        user.save()
-                                        print(f"Set sub_end_date for user={user.email} until {user.sub_end_date}")
-
-                                    # Hard-reset credits to the subscribed tier.
-                                    # Fall back to top-off for legacy/generic subs.
-                                    price_id = (session.get('metadata') or {}).get('price_id', '')
-                                    credit_pack = STRIPE_CREDIT_PACKAGES.get(price_id)
-                                    quota, _ = TokenQuota.objects.get_or_create(user_id=str(user.id))
-                                    if credit_pack:
-                                        quota.remaining_tokens = credit_pack["tokens"]
+                                if credit_pack:
+                                    if session_id and TokenPurchase.objects.filter(transaction_ref=session_id).exists():
+                                        print(f"Duplicate Stripe sub purchase skipped: {session_id=}")
                                     else:
-                                        quota.top_off_tokens(SUB_CREDIT_CAP_DEFAULT)
-                                    if period_end:
-                                        quota.reset_at = unix_to_datetime(period_end)
-                                    quota.save()
-                                    tier = f"{credit_pack['credits']} credits" if credit_pack else "default"
-                                    print(f"Reset {tier} for user={user.email}, "
-                                          f"remaining={quota.remaining_tokens}")
+                                        quota.add_tokens(credit_pack["tokens"])
+                                        amount_minor = session.get('amount_total') or 0
+                                        price_paid = (amount_minor / 100.0) if amount_minor else 0
+                                        TokenPurchase.objects.create(
+                                            user_id=str(user.id),
+                                            package_id=price_id,
+                                            tokens_added=credit_pack["tokens"],
+                                            price_paid_usd=price_paid,
+                                            method=TokenPurchase.STRIPE,
+                                            transaction_ref=session_id,
+                                        )
+                                        print(f"Credited {credit_pack['tokens']} tokens "
+                                              f"({credit_pack['credits']} credits) via Stripe sub "
+                                              f"to user={user.email} @ ${price_paid}")
 
-                                    # Record purchase using actual Stripe-charged amount
-                                    # (amount_total is in minor units of session.currency).
-                                    if credit_pack:
-                                        session_id = session.get('id', '')
-                                        if session_id and not TokenPurchase.objects.filter(
-                                            transaction_ref=session_id
-                                        ).exists():
-                                            amount_minor = session.get('amount_total') or 0
-                                            price_paid = (amount_minor / 100.0) if amount_minor else 0
-                                            TokenPurchase.objects.create(
-                                                user_id=str(user.id),
-                                                package_id=price_id,
-                                                tokens_added=credit_pack["tokens"],
-                                                price_paid_usd=price_paid,
-                                                method=TokenPurchase.STRIPE,
-                                                transaction_ref=session_id,
-                                            )
-                                            print(f"Recorded Stripe sub purchase {session_id=} "
-                                                  f"@ ${price_paid}")
-                                except Exception as sub_err:
-                                    print(f"Error retrieving subscription: {sub_err}")
+                                if period_end:
+                                    quota.reset_at = unix_to_datetime(period_end)
+                                quota.save()
+                                tier = f"{credit_pack['credits']} credits" if credit_pack else "no-ads"
+                                print(f"Checkout complete: {tier} for user={user.email}, "
+                                      f"remaining={quota.remaining_tokens}")
+                            except Exception as sub_err:
+                                print(f"Error retrieving subscription: {sub_err}")
                 except Exception as err:
                     print(f"Error with checkout.session.completed: {err}")
 
@@ -738,16 +659,32 @@ class HookViewSet(viewsets.ViewSet):
                     user.sub_end_date = datetime.fromtimestamp(sub_end, tz=timezone.utc)
                     user.save()
 
-                # On renewals, record the TokenPurchase using Stripe's actual
-                # amount_paid. The initial purchase is recorded by
-                # checkout.session.completed, so we skip `subscription_create`.
                 billing_reason = invoice.get('billing_reason', '')
-                price_id = (first_line.get('price') or {}).get('id', '')
+                # New Stripe API: pricing.price_details.price; fall back to old price.id
+                pricing = first_line.get('pricing') or {}
+                price_id = (
+                    (pricing.get('price_details') or {}).get('price', '')
+                    or (first_line.get('price') or {}).get('id', '')
+                )
                 credit_pack = STRIPE_CREDIT_PACKAGES.get(price_id)
+                print(f"[invoice.paid] {billing_reason=} {price_id=} credit_pack={credit_pack is not None}")
 
-                if credit_pack and billing_reason == 'subscription_cycle':
+                if credit_pack and billing_reason in ('subscription_create', 'subscription_cycle'):
                     invoice_id = invoice.get('id', '')
-                    if invoice_id and not TokenPurchase.objects.filter(transaction_ref=invoice_id).exists():
+                    if invoice_id and TokenPurchase.objects.filter(transaction_ref=invoice_id).exists():
+                        print(f"[invoice.paid] Duplicate skipped: {invoice_id=}")
+                    else:
+                        quota, _ = TokenQuota.objects.get_or_create(user_id=str(user.id))
+                        if billing_reason == 'subscription_cycle':
+                            # Renewal: reset to tier (no rollover)
+                            quota.remaining_tokens = credit_pack["tokens"]
+                        else:
+                            # Initial purchase: add tokens
+                            quota.add_tokens(credit_pack["tokens"])
+                        if sub_end:
+                            quota.reset_at = datetime.fromtimestamp(sub_end, tz=timezone.utc)
+                        quota.save()
+
                         amount_minor = invoice.get('amount_paid') or 0
                         price_paid = (amount_minor / 100.0) if amount_minor else 0
                         TokenPurchase.objects.create(
@@ -758,8 +695,8 @@ class HookViewSet(viewsets.ViewSet):
                             method=TokenPurchase.STRIPE,
                             transaction_ref=invoice_id,
                         )
-                        print(f"Recorded Stripe renewal {invoice_id=} @ ${price_paid} "
-                              f"for user={user.email}")
+                        print(f"[invoice.paid] {billing_reason}: granted {credit_pack['tokens']} tokens "
+                              f"({credit_pack['credits']} credits) to user={user.email} @ ${price_paid}")
 
             # ── invoice.payment_failed ────────────────────────────────────────
             elif event_type == 'invoice.payment_failed':

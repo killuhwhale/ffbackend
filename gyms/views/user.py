@@ -287,7 +287,7 @@ class RemoveAccount(viewsets.ViewSet):
     '''
      Returns workouts between a range of dates either for a user's workouts or a classes workouts.
     '''
-    @action(detail=False, methods=['POST'], permission_classes=[])
+    @action(detail=False, methods=['POST'], permission_classes=[SelfActionPermission])
     def remove(self, request, pk=None):
         try:
             from django.contrib.auth import get_user_model

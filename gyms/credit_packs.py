@@ -1,6 +1,6 @@
 from django.conf import settings
 
-TOKENS_PER_CREDIT = 18_000
+TOKENS_PER_CREDIT = 40_000
 
 # Canonical credit pack definitions — single source of truth for both the
 # Stripe webhook (stripeHooks/views.py) and the AI viewset (gyms/views/ai.py).

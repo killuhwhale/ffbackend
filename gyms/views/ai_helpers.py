@@ -19,6 +19,8 @@ LLM_GEMINI = "gemini"
 LLM_OPENAI = "openai"
 LLM = LLM_ANTHROPIC  # TODO() GET User Choice
 
+CLAUDE_MODEL = "claude-sonnet-4-6"
+
 with open("gyms/create_workout_schema.json") as f:
     base_schema = json.load(f)
 
@@ -63,7 +65,7 @@ def generate_workout_with_claude(claude_client, base_schema, max_tokens, prompt,
     )
 
     response = claude_client.messages.create(
-        model="claude-sonnet-4-6",
+        model=CLAUDE_MODEL,
         max_tokens=max_tokens,
         system=system_prompt,
         tools=claude_tools,

@@ -285,7 +285,7 @@ class BodyMeasurementsViewSet(viewsets.ModelViewSet, SelfActionPermission):
 
 class RemoveAccount(viewsets.ViewSet):
     '''
-     Returns workouts between a range of dates either for a user's workouts or a classes workouts.
+     Deletes a user's account
     '''
     @action(detail=False, methods=['POST'], permission_classes=[SelfActionPermission])
     def remove(self, request, pk=None):

@@ -17,7 +17,7 @@ CREDIT_PACKS = [
         "stripe_price_id":   settings.STRIPE_PRICE_ID_CREDITS_5,
     },
     {
-        "name":              "Popular",
+        "name":              "Athleteeee",
         "description":       "15 AI Credits / month",
         "credits":           15,
         "tokens":            15 * TOKENS_PER_CREDIT,
@@ -50,4 +50,4 @@ for _p in CREDIT_PACKS:
     RC_CREDIT_PACKAGES[_p["google_product_id"]] = _p
 
 # Default top-off for legacy/generic subscriptions that don't match a credit tier
-SUB_CREDIT_CAP_DEFAULT = 10 * TOKENS_PER_CREDIT  # 180,000 tokens
+SUB_CREDIT_CAP_DEFAULT = 10 * TOKENS_PER_CREDIT  # 400,000 tokens

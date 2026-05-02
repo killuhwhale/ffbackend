@@ -11,5 +11,6 @@ from .completed import CompletedWorkoutGroupsViewSet, CompletedWorkoutsViewSet
 from .members import CoachesViewSet, ClassMembersViewSet
 from .user import ProfileViewSet, WorkoutMaxViewSet, BodyMeasurementsViewSet, RemoveAccount
 from .ai import AIViewSet
+from .ai_user_keys import AIUserKeyViewSet
 from .bulk import BulkTemplateViewSet
 from .stats import StatsViewSet, SnapshotViewSet, AppControlViewSet

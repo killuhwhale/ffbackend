@@ -109,7 +109,7 @@ def clean_gemini_schema(schema):
     return schema
 
 
-def generate_workout_with_gemini(base_schema, max_tokens, prompt, scheme_type_text, userMaxes, lastWorkoutGroups) -> dict:
+def generate_workout_with_gemini(base_schema, max_tokens, prompt, scheme_type_text, userMaxes, lastWorkoutGroups, api_key=None) -> dict:
     # 1. Create a deep copy so we don't break the schema for OpenAI/Claude
     gemini_schema = copy.deepcopy(base_schema["parameters"])
 
@@ -127,6 +127,9 @@ def generate_workout_with_gemini(base_schema, max_tokens, prompt, scheme_type_te
         "Structure your output as JSON only — no extra text.\n\n"
         + base_schema.get("description", "")
     )
+
+    if api_key:
+        genai.configure(api_key=api_key)
 
     model = genai.GenerativeModel(
         'gemini-2.0-flash',

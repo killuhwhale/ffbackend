@@ -49,5 +49,5 @@ for _p in CREDIT_PACKS:
     RC_CREDIT_PACKAGES[_p["apple_product_id"]]  = _p
     RC_CREDIT_PACKAGES[_p["google_product_id"]] = _p
 
-# Default top-off for legacy/generic subscriptions that don't match a credit tier
-SUB_CREDIT_CAP_DEFAULT = 10 * TOKENS_PER_CREDIT  # 400,000 tokens
+# Default top-off for basic/legacy subscriptions that don't match a credit tier.
+SUB_CREDIT_CAP_DEFAULT = 2 * TOKENS_PER_CREDIT  # 80,000 tokens

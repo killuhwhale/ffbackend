@@ -57,8 +57,41 @@ def get_user(user_id) -> Union[UserType, None]:
         user = User.objects.get(id=user_id)
     except Exception as err:
         print(f"Error getting user via user_id : ", err)
-        logger.debug(f"Error getting user via user_id: ", err)
+        logger.debug("Error getting user via user_id=%s: %s", user_id, err)
     return user
+
+
+def revenuecat_user_ids(values) -> list:
+    """Extract app user ids from RevenueCat alias lists, excluding anonymous ids."""
+    user_ids = []
+    for value in values or []:
+        value = str(value)
+        if value and not value.startswith("$RCAnonymousID:"):
+            user_ids.append(value)
+    return user_ids
+
+
+def move_revenuecat_subscription_state(source_user_ids, destination_user_ids) -> None:
+    """Move credits/purchase history after RevenueCat transfers an Apple/Google subscription."""
+    for source_user_id in revenuecat_user_ids(source_user_ids):
+        for destination_user_id in revenuecat_user_ids(destination_user_ids):
+            if source_user_id == destination_user_id:
+                continue
+
+            source_quota = TokenQuota.objects.filter(user_id=source_user_id).first()
+            destination_quota, _ = TokenQuota.objects.get_or_create(user_id=destination_user_id)
+
+            if source_quota:
+                destination_quota.remaining_tokens = max(
+                    destination_quota.remaining_tokens,
+                    source_quota.remaining_tokens,
+                )
+                destination_quota.reset_at = max(destination_quota.reset_at, source_quota.reset_at)
+                destination_quota.save()
+                source_quota.delete()
+
+            TokenPurchase.objects.filter(user_id=source_user_id).update(user_id=destination_user_id)
+            print(f"[RevenueCat] Transferred subscription state {source_user_id=} -> {destination_user_id=}")
 
 
 def get_future_datetime(dt: datetime) -> datetime:
@@ -404,12 +437,40 @@ class HookViewSet(viewsets.ViewSet):
                 print(f"[RevenueCat] UNCANCELLATION: {user_id=}, {exp_date=}, {product_id=}")
                 logger.info(f"[RevenueCat] UNCANCELLATION: {user_id=}")
 
-                # User re-subscribed — update sub_end_date
+                # User re-enabled auto-renew — restore subscription access and credits.
                 user = get_user(user_id)
-                if user and exp_date:
-                    user.sub_end_date = datetime.fromtimestamp(exp_date // 1000, tz=timezone.utc)
+                if user:
+                    if exp_date:
+                        reset_at = datetime.fromtimestamp(exp_date // 1000, tz=timezone.utc)
+                    else:
+                        reset_at = datetime.now(tz=timezone.utc) + timedelta(days=30)
+
+                    user.sub_end_date = reset_at
                     user.save()
                     print(f"[RevenueCat] Updated sub_end_date for {user_id=}: {user.sub_end_date}")
+                else:
+                    msg = f"[RevenueCat] Error getting user to uncancel sub: {app_user_id=}, {user_id=}, {exp_date=}"
+                    logger.warning(msg)
+                    print(msg)
+
+                if user_id:
+                    package = RC_CREDIT_PACKAGES.get(product_id)
+                    quota, _ = TokenQuota.objects.get_or_create(user_id=user_id)
+
+                    if package:
+                        quota.remaining_tokens = package["tokens"]
+                    else:
+                        quota.top_off_tokens(SUB_CREDIT_CAP_DEFAULT)
+
+                    if exp_date:
+                        quota.reset_at = datetime.fromtimestamp(exp_date // 1000, tz=timezone.utc)
+                    else:
+                        quota.reset_at = datetime.now(tz=timezone.utc) + timedelta(days=30)
+                    quota.save()
+
+                    tier = f"{package['credits']} credits" if package else "default"
+                    print(f"[RevenueCat] UNCANCELLATION reset {tier} for {user_id=}, "
+                          f"remaining={quota.remaining_tokens}, reset_at={quota.reset_at}")
 
             # ── Expiration ──────────────────────────────────────────────────
             elif event_type == "EXPIRATION":
@@ -468,6 +529,7 @@ class HookViewSet(viewsets.ViewSet):
                 transferred_to = event.get("transferred_to", [])
                 print(f"[RevenueCat] TRANSFER: {transferred_from=} -> {transferred_to=}")
                 logger.info(f"[RevenueCat] TRANSFER: {transferred_from=} -> {transferred_to=}")
+                move_revenuecat_subscription_state(transferred_from, transferred_to)
 
             # ── Refund reversed ─────────────────────────────────────────────
             elif event_type == "REFUND_REVERSED":

@@ -47,6 +47,10 @@ containing ONLY the newly revealed or changed fields:
 {"reply": "your message", "memory_update": {"weight": "185lbs", "diet": "mostly carnivore"}}
 
 Omit any memory_update fields the user did NOT mention this turn.
+
+If user asks for a specific type of workout, reply genericly and guide them towards using the 'Generate Workout" feature.
+
+You are limited to 2000 token response.
 """
 
 
@@ -289,7 +293,7 @@ class AIViewSet(viewsets.ViewSet):
 
                 resp = claude_client.messages.create(
                     model="claude-sonnet-4-6",
-                    max_tokens=600,
+                    max_tokens=2000,
                     system=system_prompt,
                     messages=claude_messages,
                 )

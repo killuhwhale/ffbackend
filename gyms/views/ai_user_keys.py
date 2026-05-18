@@ -24,6 +24,12 @@ from .helpers import check_users_workouts_and_completed_today, is_member
 from .permissions import SelfActionPermission
 
 logger = logging.getLogger(__name__)
+BACKEND_LLM_PROXY_DISABLED_RESPONSE = {
+    "error": (
+        "Backend AI proxy is disabled. Configure an AI provider key in the app "
+        "to use direct provider calls."
+    )
+}
 
 SUPPORTED_PROVIDERS = {
     "claude": LLM_ANTHROPIC,
@@ -58,6 +64,12 @@ def _openai_client(api_key):
 class AIUserKeyViewSet(viewsets.ViewSet):
     @action(detail=False, methods=["POST"], permission_classes=[SelfActionPermission])
     def create_workout(self, request, pk=None):
+        logger.warning(
+            "[user-key/create_workout] blocked backend LLM proxy request user=%s",
+            getattr(request.user, "id", "?"),
+        )
+        return Response(BACKEND_LLM_PROXY_DISABLED_RESPONSE, status=410)
+
         if not is_member(request) and not check_users_workouts_and_completed_today(request):
             return Response(
                 {"error": "Daily workout limit reached. Upgrade your membership to create more workouts."},
@@ -117,6 +129,12 @@ class AIUserKeyViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=["POST"], permission_classes=[SelfActionPermission])
     def chat(self, request, pk=None):
+        logger.warning(
+            "[user-key/chat] blocked backend LLM proxy request user=%s",
+            getattr(request.user, "id", "?"),
+        )
+        return Response(BACKEND_LLM_PROXY_DISABLED_RESPONSE, status=410)
+
         provider, api_key, error = _provider_from_request(request)
         if error:
             return error

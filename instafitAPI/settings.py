@@ -39,9 +39,6 @@ env = environ.Env(
     DJANGO_ALLOWED_HOSTS=(str, "127.0.0.1,localhost"),
     RUN_ENV=(str, "dev"),
     REVENUECAT_TOKEN=(str, ""),
-    OPENAI_API_KEY=(str, ""),
-    ANTHROPIC_API_KEY=(str, ""),
-    GEMINI_API_KEY=(str, ""),
     LOG_LEVEL=(str, ""),
 
 )
@@ -62,9 +59,12 @@ LOG_LEVEL = cenv("LOG_LEVEL") or ("DEBUG" if DEBUG else "INFO")
 
 
 SECRET_KEY = get_random_secret_key()
-OPENAI_API_KEY = cenv("OPENAI_API_KEY")
-ANTHROPIC_API_KEY = cenv("ANTHROPIC_API_KEY")
-GEMINI_API_KEY = cenv("GEMINI_API_KEY")
+# Server-side LLM credentials are intentionally disabled. The mobile app's
+# API-key mode calls providers directly with user-owned keys, and the backend
+# must not load or spend LiftL0g-owned provider credentials.
+OPENAI_API_KEY = ""
+ANTHROPIC_API_KEY = ""
+GEMINI_API_KEY = ""
 
 ALLOWED_HOSTS = cenv("DJANGO_ALLOWED_HOSTS",
                           "127.0.0.1,localhost").split(",")

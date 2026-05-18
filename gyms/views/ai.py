@@ -106,11 +106,22 @@ def _parse_chat_response(raw):
 # Aliases for local readability — data lives in gyms/credit_packs.py
 TOKEN_PACKAGES = CREDIT_PACKS
 TOKEN_PACKAGES_MAP = RC_CREDIT_PACKAGES
+SERVER_LLM_DISABLED_RESPONSE = {
+    "error": (
+        "Server-side AI is disabled. Configure an AI provider key in the app "
+        "to use direct provider calls."
+    )
+}
 
 
 class AIViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['POST'], permission_classes=[SelfActionPermission])
     def create_workout(self, request, pk=None):
+        logger.warning(
+            "[create_workout] blocked server-side LLM request user=%s",
+            getattr(request.user, 'id', '?'),
+        )
+        return Response(SERVER_LLM_DISABLED_RESPONSE, status=410)
 
         # ── Enforce workout creation limits before burning tokens ─────────────
         if not is_member(request) and not check_users_workouts_and_completed_today(request):
@@ -218,6 +229,12 @@ class AIViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=['POST'], permission_classes=[SelfActionPermission])
     def chat(self, request, pk=None):
+        logger.warning(
+            "[chat] blocked server-side LLM request user=%s",
+            getattr(request.user, 'id', '?'),
+        )
+        return Response(SERVER_LLM_DISABLED_RESPONSE, status=410)
+
         # ── Parse incoming payload ────────────────────────────────────────────
         message        = request.data.get('message', '').strip()
         history        = request.data.get('history', [])

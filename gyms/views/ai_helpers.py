@@ -7,8 +7,6 @@ import tiktoken
 from openai import OpenAI
 import google.generativeai as genai
 
-from instafitAPI import settings
-
 logger = logging.getLogger(__name__)
 
 # Load workout generation philosophy once at import time
@@ -20,16 +18,17 @@ WORKOUT_GENERATION_RULES = (
 LLM_ANTHROPIC = "anthropic"
 LLM_GEMINI = "gemini"
 LLM_OPENAI = "openai"
-LLM = LLM_ANTHROPIC  # TODO() GET User Choice
+LLM = None  # Server-side LLM calls are disabled.
 
 CLAUDE_MODEL = "claude-sonnet-4-6"
 
 with open("gyms/create_workout_schema.json") as f:
     base_schema = json.load(f)
 
-# Initialize the Anthropic client
-claude_client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
-# genai.configure(api_key=settings.GEMINI_API_KEY) # Will revisit in the future
+# Do not initialize provider clients with LiftL0g-owned credentials at import
+# time. Server-side LLM spending is disabled; user-key mode constructs clients
+# with request-provided keys only.
+claude_client = None
 
 tools = [
     {
@@ -42,7 +41,6 @@ tools = [
     }
 ]
 
-# client = OpenAI(api_key=settings.OPENAI_API_KEY) # Will revisit in the future
 client = None
 
 

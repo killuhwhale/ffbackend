@@ -59,15 +59,14 @@ from .s3 import s3Client
 LLM_ANTHROPIC = "anthropic"
 LLM_GEMINI = "gemini"
 LLM_OPENAI = "openai"
-LLM = LLM_OPENAI # TODO() GET USer Choice
+LLM = None  # Server-side LLM calls are disabled.
 
 with open("gyms/create_workout_schema.json") as f:
     base_schema = json.load(f)
 
 
-# Initialize the Anthropic client
-claude_client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
-genai.configure(api_key=settings.GEMINI_API_KEY)
+# Do not initialize provider clients with LiftL0g-owned credentials.
+claude_client = None
 
 tools = [
     {
@@ -80,7 +79,7 @@ tools = [
     }
 ]
 
-client = OpenAI(api_key=settings.OPENAI_API_KEY)
+client = None
 tz = pytz.timezone("US/Pacific")
 s3_client = s3Client()
 env = environ.Env()
@@ -3224,5 +3223,4 @@ class AppControlViewSet(viewsets.ViewSet):
         return JsonResponse({
             'membership_on': False
         })
-
 

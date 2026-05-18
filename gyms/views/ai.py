@@ -125,14 +125,22 @@ class AIViewSet(viewsets.ViewSet):
         userMaxes = request.data.get('userMaxes')
         lastWorkoutGroups = request.data.get('lastWorkoutGroups')
         remaining = quota.remaining_tokens
-        print(f"{quota=}, {prompt=}, {scheme_type_text=}, {userMaxes=}, {lastWorkoutGroups=}, {remaining=}")
+        logger.debug(
+            "[create_workout] user=%s prompt=%r scheme_type=%r user_maxes=%r last_workout_groups=%r remaining=%d",
+            getattr(request.user, 'id', '?'),
+            prompt,
+            scheme_type_text,
+            userMaxes,
+            lastWorkoutGroups,
+            remaining,
+        )
 
         if not prompt:
-            print("Error No prompt given")
+            logger.warning("[create_workout] rejected empty prompt user=%s", getattr(request.user, 'id', '?'))
             return Response({"error": ' No prompt given'})
 
         if remaining <= 0:
-            print("Error: Out of tokens")
+            logger.warning("[create_workout] user=%s out of tokens", getattr(request.user, 'id', '?'))
             return Response({"error": 'Out of tokens'})
 
         messages = [
@@ -150,7 +158,7 @@ class AIViewSet(viewsets.ViewSet):
         if input_tokens >= remaining:
             return Response({"error": "Token quota exceeded"}, status=403)
 
-        print("Input token: ", input_tokens)
+        logger.info("[create_workout] input_tokens=%d remaining=%d", input_tokens, remaining)
         max_output_tokens = remaining - input_tokens
 
         if max_output_tokens <= 1500:
@@ -195,12 +203,17 @@ class AIViewSet(viewsets.ViewSet):
             total_tokens = result["tokens"]["total"]
 
             quota.use_tokens(total_tokens)
-            print(f"Tokens used this request: {input_tokens_used} + {output_tokens_used} = {total_tokens}")
-            print(f"Token Usage: {quota.remaining_tokens}/1,750,000")
+            logger.info(
+                "[create_workout] tokens input=%d output=%d total=%d remaining=%d",
+                input_tokens_used,
+                output_tokens_used,
+                total_tokens,
+                quota.remaining_tokens,
+            )
 
             return Response({'data': result["data"]})
         except Exception as e:
-            print("Error AI create_workout", e)
+            logger.exception("[create_workout] failed user=%s", getattr(request.user, 'id', '?'))
             return Response({'data': "", "error": str(e)})
 
     @action(detail=False, methods=['POST'], permission_classes=[SelfActionPermission])
@@ -278,7 +291,7 @@ class AIViewSet(viewsets.ViewSet):
                 )
                 raw = resp.choices[0].message.content.strip()
                 tokens_used = resp.usage.total_tokens
-                logger.info("[chat/openai] raw=%r tokens=%d", raw[:120], tokens_used)
+                logger.debug("[chat/openai] raw=%r tokens=%d", raw[:120], tokens_used)
                 reply, memory_update = _parse_chat_response(raw)
                 logger.info("[chat/openai] reply_len=%d memory_update=%s", len(reply), bool(memory_update))
 
@@ -299,7 +312,7 @@ class AIViewSet(viewsets.ViewSet):
                 )
                 tokens_used = resp.usage.input_tokens + resp.usage.output_tokens
                 raw = resp.content[0].text.strip() if resp.content else ""
-                logger.info(
+                logger.debug(
                     "[chat/claude] stop_reason=%r tokens=%d raw=%r",
                     resp.stop_reason, tokens_used, raw[:120],
                 )
@@ -331,7 +344,7 @@ class AIViewSet(viewsets.ViewSet):
                 resp = chat_session.send_message(message, generation_config=config)
                 raw = resp.text.strip()
                 tokens_used = resp.usage_metadata.total_token_count
-                logger.info("[chat/gemini] raw=%r tokens=%d", raw[:120], tokens_used)
+                logger.debug("[chat/gemini] raw=%r tokens=%d", raw[:120], tokens_used)
                 reply, memory_update = _parse_chat_response(raw)
                 logger.info("[chat/gemini] reply_len=%d memory_update=%s", len(reply), bool(memory_update))
 

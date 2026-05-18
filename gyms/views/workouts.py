@@ -1,4 +1,5 @@
 import json
+import logging
 from django.db import transaction
 from django.utils import timezone
 from rest_framework import viewsets, status
@@ -39,6 +40,8 @@ from .permissions import (
     WorkoutPermission,
 )
 
+logger = logging.getLogger(__name__)
+
 
 def has_unfinished_workoutgroups(workout_group):
     # This is a workoutGroup that is a part of the template
@@ -72,7 +75,7 @@ class WorkoutGroupsViewSet(viewsets.ModelViewSet, WorkoutGroupsPermission):
                     if jbool(data.get('is_template', False))
                     else WorkoutGroups.CreationSource.MANUAL
                 )
-            print("Attempting to create WorkoutGroup with data: ", data)
+            logger.debug("Attempting to create WorkoutGroup data=%s", data)
             serializer = WorkoutGroupsCreateSerializer(
                 data={**data, 'media_ids': '[]'}
             )
@@ -82,7 +85,7 @@ class WorkoutGroupsViewSet(viewsets.ModelViewSet, WorkoutGroupsPermission):
             if not newly_created:
                 return Response(to_err("Workout already created. Must delete and reupload w/ media or edit workout.", ))
         except Exception as e:
-            print("Error creating workout group:", e)
+            logger.exception("Error creating workout group")
             return Response(to_err(f"Error creating workout group: {e}", exception=e), status=422)
         return Response(WorkoutGroupsSerializer(workout_group, context={'request': request}).data)
 
@@ -135,18 +138,18 @@ class WorkoutGroupsViewSet(viewsets.ModelViewSet, WorkoutGroupsPermission):
                 del workout_json['workout_items']
                 del workout_json['id']
 
-                print(f"{workout_json=}")
+                logger.debug("Duplicating workout workout_json=%s", workout_json)
                 workout_stats_json = workout_json['stats']
                 del workout_json['stats']
 
                 workout_data = {**workout_json, 'group_id': workout_group.id}
                 del workout_data['group']
-                print(f"{workout_data=}")
+                logger.debug("Duplicating workout workout_data=%s", workout_data)
 
                 workout, new_or_nah = Workouts.objects.get_or_create(**workout_data)
-                print(f'Got Workout ({new_or_nah=}):', f"{workout.scheme_type=}")
+                logger.debug("Got workout newly_created=%s scheme_type=%s", new_or_nah, workout.scheme_type)
                 workout_stats = WorkoutStats.objects.create(workout=workout, tags=workout_stats_json['tags'], items=workout_stats_json['items'])
-                print(f'Created WorkoutState {workout_stats=}')
+                logger.debug("Created WorkoutStats workout_stats_id=%s", workout_stats.id)
 
                 new_items = []
                 for item_json in items:
@@ -186,15 +189,13 @@ class WorkoutGroupsViewSet(viewsets.ModelViewSet, WorkoutGroupsPermission):
 
         last_id = self.last_id_from_media(cur_media_ids)
 
-        print("Last id: ", last_id)
+        logger.debug("Adding workout media workout_group_id=%s last_id=%s", workout_group_id, last_id)
         uploaded_names = upload_media(
             files, workout_group.id, FILES_KINDS[WORKOUT_FILES], start=last_id + 1)
-        print("Num uploaded: ", uploaded_names)
-
-        print("Cur media ids: ", cur_media_ids)
+        logger.debug("Uploaded workout media names=%s", uploaded_names)
         cur_media_ids.extend(uploaded_names)
 
-        print("Updated Cur media ids: ", cur_media_ids)
+        logger.debug("Updated workout media ids=%s", cur_media_ids)
         workout_group.media_ids = json.dumps(cur_media_ids)
         workout_group.save()
         return Response(to_data("Successfully added media to workout"))
@@ -211,25 +212,24 @@ class WorkoutGroupsViewSet(viewsets.ModelViewSet, WorkoutGroupsPermission):
 
             cur_media_ids = list(
                 filter(lambda n: not str(n) in deleted_ids, cur_media_ids))
-            print("Filtered Current media ids: ", cur_media_ids)
+            logger.debug("Filtered workout media ids=%s", cur_media_ids)
             workout_group.media_ids = json.dumps(cur_media_ids)
             workout_group.save()
             return Response(to_data("Deleted"))
         except Exception as e:
-            print(e)
+            logger.exception("Failed to remove workout media")
             return Response(to_err("Failed to remove media"))
 
     @action(detail=True, methods=['get'], permission_classes=[])
     def user_workouts(self, request, pk=None):
         try:
             owner_id = request.user.id
-            print("Owner id", owner_id)
+            logger.debug("Fetching user workouts owner_id=%s workout_group_id=%s", owner_id, pk)
             workout_groups: WorkoutGroups = WorkoutGroups.objects.get(
                 owner_id=owner_id, owned_by_class=False, id=pk)
             return Response(WorkoutGroupsSerializer(workout_groups, context={'request': request, }).data)
         except Exception as e:
-            print("\n\n\n\n\nWorkoutGroupsViewSet user_workouts", e)
-            print("Request", request)
+            logger.exception("WorkoutGroupsViewSet user_workouts failed")
             return Response({'error': "Failed get user's workout group."}, status=500)
 
     @action(detail=False, methods=['get'], permission_classes=[SelfActionPermission])
@@ -254,7 +254,7 @@ class WorkoutGroupsViewSet(viewsets.ModelViewSet, WorkoutGroupsPermission):
                 ).data
             )
         except Exception as e:
-            print(e)
+            logger.exception("Failed get Gym class's workouts")
             return Response(to_err("Failed get Gym class's workouts."))
 
     @action(detail=False, methods=['post'], permission_classes=[SelfActionPermission])
@@ -287,7 +287,7 @@ class WorkoutGroupsViewSet(viewsets.ModelViewSet, WorkoutGroupsPermission):
         if updated_title:
             grp = WorkoutGroups.objects.get(id=wid)
             if grp:
-                print("Updating title to: ", updated_title)
+                logger.debug("Updating workout group title group_id=%s", wid)
                 grp.title = updated_title
                 grp.save()
                 return Response({"data": 'successfully updated title'})
@@ -301,7 +301,7 @@ class WorkoutGroupsViewSet(viewsets.ModelViewSet, WorkoutGroupsPermission):
         if updated_caption:
             grp = WorkoutGroups.objects.get(id=wid)
             if grp:
-                print("Updating caption to: ", updated_caption)
+                logger.debug("Updating workout group caption group_id=%s", wid)
                 grp.caption = updated_caption
                 grp.save()
                 return Response({"data": 'successfully updated caption'})
@@ -315,7 +315,7 @@ class WorkoutGroupsViewSet(viewsets.ModelViewSet, WorkoutGroupsPermission):
         if updated_for_date:
             grp = WorkoutGroups.objects.get(id=wid)
             if grp:
-                print("Updating for date to: ", updated_for_date)
+                logger.debug("Updating workout group for_date group_id=%s for_date=%s", wid, updated_for_date)
                 serializer = WorkoutGroupsCreateSerializer(
                     grp,
                     data={'for_date': updated_for_date},
@@ -331,7 +331,7 @@ class WorkoutGroupsViewSet(viewsets.ModelViewSet, WorkoutGroupsPermission):
         try:
             user_id = request.user.id
             workout_group_id = request.data.get("group")
-            print(f"Finishing workout group: {workout_group_id=}")
+            logger.debug("Finishing workout group workout_group_id=%s user_id=%s", workout_group_id, user_id)
             workout_group = WorkoutGroups.objects.get(id=workout_group_id)
             if not workout_group.workouts_set.exists():
                 return Response(to_data(f"Cannot finish workoutgroup without workouts {workout_group_id=}."))
@@ -349,7 +349,7 @@ class WorkoutGroupsViewSet(viewsets.ModelViewSet, WorkoutGroupsPermission):
                         not is_gymclass_coach(request.user, gym_class)):
                     return Response({"error": "User is not owner or coach"})
             elif not str(user_id) == str(workout_group.owner_id):
-                print("User is not owner")
+                logger.debug("Finish workout rejected, user is not owner user_id=%s owner_id=%s", user_id, workout_group.owner_id)
                 return Response({"error": "User is not owner"})
 
             # Free-tier users can only finish one workout group per day
@@ -374,7 +374,7 @@ class WorkoutGroupsViewSet(viewsets.ModelViewSet, WorkoutGroupsPermission):
 
             return Response(WorkoutGroupsSerializer(workout_group, context={'request': request}).data)
         except Exception as e:
-            print("Error finished group workout", e)
+            logger.exception("Error finished group workout")
             return Response({"error": "Error finished group workout"})
 
     def destroy(self, request, pk=None):
@@ -424,23 +424,23 @@ class WorkoutsViewSet(viewsets.ModelViewSet, WorkoutPermission):
             data = {**request.data.dict(), 'group_id': workout_group_id}
             del data['group']
 
-            print('Workout data:', data)
+            logger.debug("Creating workout data=%s", data)
             workout, new_or_nah = Workouts.objects.get_or_create(**data)
 
             return Response(WorkoutCreateSerializer(workout).data)
         except Exception as err:
-            print(f"Error creating Workout: ", err)
+            logger.exception("Error creating Workout")
             return Response(to_err(str(err), err))
 
     def update(self, request, *args, **kwargs):
-        print(f"PUT Update: {args=} {kwargs=}")
+        logger.debug("PUT update workout args=%s kwargs=%s", args, kwargs)
         try:
             partial = kwargs.pop('partial', False)
             workout = self.get_object()
 
             serializer = self.get_serializer(workout, data=request.data, partial=partial)
 
-            print(f"update: {request.data=}")
+            logger.debug("Workout update data_keys=%s", list(request.data.keys()))
 
             if serializer.is_valid():
                 serializer.save()
@@ -448,13 +448,13 @@ class WorkoutsViewSet(viewsets.ModelViewSet, WorkoutPermission):
             else:
                 return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         except Exception as err:
-            print(f"Update Workout error: {err=}")
+            logger.exception("Update Workout error")
         return Response({'detail': "Update Workout error"})
 
     def destroy(self, request, pk=None):
         workout_id = pk
         workout = Workouts.objects.get(id=workout_id)
-        print(f"Destroying wod from group {workout.group.finished=}")
+        logger.debug("Destroying workout workout_id=%s group_finished=%s", workout_id, workout.group.finished)
         if workout.group.finished:
             return Response(to_err("Cannot remove workouts from finished workout group."), status=403)
 

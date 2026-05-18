@@ -35,15 +35,15 @@ logger = logging.getLogger(__name__)
 def get_user_timezone(request):
     g = GeoIP2()
     user_ip = request.META.get('REMOTE_ADDR')
-    print('get_user_timezone', user_ip)
+    logger.debug("Resolving timezone for remote_addr=%s", user_ip)
     if user_ip:
         try:
             # Get the user's timezone based on their IP address
             user_timezone = g.city(user_ip)['time_zone']
-            print(f"user_timezone: {user_timezone=}")
+            logger.debug("Resolved user timezone=%s", user_timezone)
             return user_timezone
-        except:
-            pass
+        except Exception as error:
+            logger.debug("Timezone lookup failed for remote_addr=%s: %s", user_ip, error)
     return "US/Pacific"
 
 
@@ -53,7 +53,7 @@ class JWTMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        print(f"middleware req: {request.method=}, {request.path=} ")
+        logger.debug("JWTMiddleware request method=%s path=%s", request.method, request.path)
         # Let CORS preflight requests through — they never carry an Authorization
         # header, so JWT checks would always 401 them and break the browser.
         if request.method == "OPTIONS":
@@ -64,7 +64,7 @@ class JWTMiddleware:
 
         if request.path in ['/hooks/revenuecat/', '/hooks/webhook/', '/hooks/create-checkout/', '/hooks/create_checkout/', '/hooks/customer-portal/', '/hooks/customer_portal/', '/hooks/session-status/', '/hooks/session_status/', '/login/', '/register/', '/token/', '/token/refresh/', '/users/', '/user/send_reset_code/', '/user/reset_password/', '/emailvalidation/confirm_email/', '/emailvalidation/send_confirmation_email']:
             if request.path == "/users/" and not request.method == "POST":
-                print(f"Needs access token  for this users request, only post is bypassed... {request.method=}",)
+                logger.debug("Users route requires auth for method=%s", request.method)
                 # return JsonResponse({'error': f'Invalid access token, route not permitted '}, status=401)
             elif request.path == "/hooks/revenuecat/":
                 auth_header = request.META.get('HTTP_AUTHORIZATION', '')
@@ -72,13 +72,13 @@ class JWTMiddleware:
                 # Support both "Bearer <token>" and raw token formats
                 provided_token = auth_header.replace("Bearer ", "", 1) if auth_header.startswith("Bearer ") else auth_header
                 if expected_token and provided_token == expected_token:
-                    print("RevenueCat access granted..")
+                    logger.debug("RevenueCat access granted")
                     response = self.get_response(request)
                     return response
                 else:
                     return JsonResponse({'error': 'Invalid access token'}, status=401)
             else:
-                print("No access token needed... ")
+                logger.debug("No access token required for path=%s", request.path)
                 response = self.get_response(request)
                 return response
 
@@ -107,7 +107,7 @@ class TzMiddleware:
     def __call__(self, request):
         # logger.critical(f"middleware req: {request=} {request.method=}, {request.path=} ")
         tz = get_user_timezone(request)
-        print(f"TZMiddleware: {tz=}", )
+        logger.debug("TZMiddleware timezone=%s", tz)
         if tz is not None:
             request.tz = tz
 

@@ -51,7 +51,7 @@ class GymSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
     def get_gym_classes(self, instance):
-        print('Gym View instance: ', instance)
+        logger.debug("Serializing gym classes for gym_id=%s", getattr(instance, "id", None))
         classes = instance.gymclasses_set.order_by('-date')
         return Gym_ClassSerializer(classes, many=True, required=False).data
 
@@ -124,7 +124,7 @@ class CompletedWorkoutSerializer(serializers.ModelSerializer):
     completed_workout_items = serializers.SerializerMethodField("items")
 
     def items(self, completed_workout):
-        print(f"CompItemSerializer: {completed_workout=}")
+        logger.debug("Serializing completed workout items completed_workout_id=%s", getattr(completed_workout, "id", None))
         if completed_workout.scheme_type <= 2:
             return CompletedWorkoutItemSerializer(completed_workout.completedworkoutitems_set, many=True, required=False).data
         return CompletedWorkoutDualItemSerializer(completed_workout.completedworkoutdualitems_set, many=True, required=False).data
@@ -212,7 +212,7 @@ class WorkoutSerializer(serializers.ModelSerializer):
     stats = WorkoutStatsSerializer(read_only=True)
 
     def items(self, workout):
-        print("Serializing workout: ", workout)
+        logger.debug("Serializing workout items workout_id=%s", getattr(workout, "id", None))
         try:
             if workout.scheme_type <= 2:
                 # logger.critical("Returning workout items: ", workout.workoutitems_set.all())
@@ -222,7 +222,7 @@ class WorkoutSerializer(serializers.ModelSerializer):
             # return workout.workoutdualitems_set.all()
             return WorkoutDualItemSerializer(workout.workoutdualitems_set.all(),  many=True, required=False).data
         except Exception as err:
-            logger.info("WorkoutItem Serializer error: ", err)
+            logger.exception("WorkoutItem Serializer error")
 
     class Meta:
         model = Workouts
@@ -340,8 +340,7 @@ class CombinedWorkoutGroupsAsWorkoutGroupsSerializer(serializers.Serializer):
     workout_groups = serializers.SerializerMethodField()
 
     def get_workout_groups(self, instance):
-        print("Instance: ", instance)
-        print("Context: ", self.context)
+        logger.debug("Serializing combined workout groups context_keys=%s", list(self.context.keys()))
         wgs = instance['created_workout_groups'].order_by('for_date')
         cwgs = instance['completed_workout_groups'].order_by('for_date')
         return serialize('json', list(chain(wgs, cwgs)))
@@ -358,10 +357,9 @@ class CombinedWorkoutGroupsSerializerNoWorkouts(serializers.Serializer):
     #     many=True, required=False)
 
     def get_created_workout_groups(self, instance):
-        print("Instance: ", instance)
-        print("Context: ", self.context)
+        logger.debug("Serializing created workout groups context_keys=%s", list(self.context.keys()))
         wgs = instance['created_workout_groups'].order_by('-for_date')
-        print("This should be sorted by for_date", wgs)
+        logger.debug("Created workout groups sorted by for_date count=%d", wgs.count())
 
         return WorkoutGroupsAutoCompletedSerializer(wgs, context=self.context,
                                                     many=True, required=False).data

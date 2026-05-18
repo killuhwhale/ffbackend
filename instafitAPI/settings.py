@@ -14,6 +14,7 @@ from django.core.management.utils import get_random_secret_key
 import os
 import sys
 import environ
+import logging
 from datetime import timedelta
 from pathlib import Path
 import dj_database_url
@@ -41,21 +42,23 @@ env = environ.Env(
     OPENAI_API_KEY=(str, ""),
     ANTHROPIC_API_KEY=(str, ""),
     GEMINI_API_KEY=(str, ""),
+    LOG_LEVEL=(str, ""),
 
 )
 environ.Env.read_env()
 
+logger = logging.getLogger(__name__)
+
 def cenv(key, d=None):
     """Combined  environments."""
     if key in env:
-        print(f"Foudn {key=} in env....")
         return env(key)
     return os.getenv(key, d)
 
 DEVELOPMENT_MODE = cenv("DEVELOPMENT_MODE", "False")
-print(DEVELOPMENT_MODE)
 DEBUG =  cenv("RUN_ENV", "False") == "dev"
-print(f"{DEBUG=} {os.getenv('USER')=}")
+RUN_ENV = cenv("RUN_ENV", "dev")
+LOG_LEVEL = cenv("LOG_LEVEL") or ("DEBUG" if DEBUG else "INFO")
 
 
 SECRET_KEY = get_random_secret_key()
@@ -63,15 +66,10 @@ OPENAI_API_KEY = cenv("OPENAI_API_KEY")
 ANTHROPIC_API_KEY = cenv("ANTHROPIC_API_KEY")
 GEMINI_API_KEY = cenv("GEMINI_API_KEY")
 
-print(f"{OPENAI_API_KEY=}")
-print(f"{ANTHROPIC_API_KEY=}")
-print(f"{GEMINI_API_KEY=}")
-
 ALLOWED_HOSTS = cenv("DJANGO_ALLOWED_HOSTS",
                           "127.0.0.1,localhost").split(",")
 ALLOWED_HOSTS.append("api.liftl0g.com")
 ALLOWED_HOSTS.append("192.168.68.55")
-print(f"{ALLOWED_HOSTS=}")
 
 FILE_UPLOAD_MAX_MEMORY_SIZE = 5242880 * 2
 
@@ -214,16 +212,11 @@ WSGI_APPLICATION = 'instafitAPI.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/4.0/ref/settings/#databases
 
-
-
-print(f"Env user: ", os.getenv("USER"))
-print(f"Args: ", sys.argv)
 BASE_URL = ""
 
 if os.getenv("USER") == "killuh" and len(sys.argv) > 1 and sys.argv[1] != 'collectstatic' and cenv("RUN_ENV") == "production":  # Need this collectstatic check to avoid erros during build step in DigitalOcean
     if os.getenv("DATABASE_URL", None) is None:
         raise Exception("DATABASE_URL environment variable not defined")
-    print("Using db url: ", cenv("DATABASE_URL"))
     DATABASES = {
         "default": dj_database_url.parse(cenv("DATABASE_URL")),
     }
@@ -276,9 +269,6 @@ elif os.getenv("USER") == "killuh" or os.getenv("USER") == "chrisandaya":
         }
     }
     BASE_URL = "http://localhost:8000"
-
-print(f"using {BASE_URL=}", cenv("RUN_ENV"))
-
 # ─── Stripe ───────────────────────────────────────────────────────────────────
 # Credit pack subscription prices (web / Stripe path)
 STRIPE_PRICE_ID_CREDITS_5  = cenv("STRIPE_PRICE_ID_CREDITS_5",  "price_1TO8KXGjKlPKN3XK5xBzLkYu")
@@ -324,13 +314,23 @@ LOGGING = {
     },
     "root": {
         "handlers": ["console"],
-        "level": "INFO",
+        "level": LOG_LEVEL,
     },
     "loggers": {
-        # Our app code — DEBUG so we see all [chat/...] trace points
+        # Our app code. Defaults to INFO in production, DEBUG in dev.
         "gyms": {
             "handlers": ["console"],
-            "level": "DEBUG",
+            "level": LOG_LEVEL,
+            "propagate": False,
+        },
+        "users": {
+            "handlers": ["console"],
+            "level": LOG_LEVEL,
+            "propagate": False,
+        },
+        "instafitAPI": {
+            "handlers": ["console"],
+            "level": LOG_LEVEL,
             "propagate": False,
         },
         # Django request/response lifecycle
@@ -360,7 +360,7 @@ USE_TZ = True
 TIME_ZONE = 'UTC'
 
 GEOIP_PATH = f'{BASE_DIR}/instafitAPI/GeoLite2-City.mmdb'
-print("GEOIP_PATH ", GEOIP_PATH)
+logger.debug("Django configured run_env=%s debug=%s base_url=%s geoip_path=%s", RUN_ENV, DEBUG, BASE_URL, GEOIP_PATH)
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.0/howto/static-files/

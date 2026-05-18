@@ -1,3 +1,4 @@
+import logging
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -27,6 +28,8 @@ from .helpers import (
 )
 from .permissions import GymClassPermission, GymPermission
 
+logger = logging.getLogger(__name__)
+
 
 class GymViewSet(DestroyWithPayloadMixin, viewsets.ModelViewSet, GymPermission):
     """
@@ -39,7 +42,7 @@ class GymViewSet(DestroyWithPayloadMixin, viewsets.ModelViewSet, GymPermission):
     def create(self, request):
         try:
             data = request.data.copy().dict()
-            print(request.FILES, data)
+            logger.debug("Creating gym files=%s data_keys=%s", list(request.FILES.keys()), list(data.keys()))
             main = request.data.get("main")
             logo = request.data.get("logo")
 
@@ -54,22 +57,22 @@ class GymViewSet(DestroyWithPayloadMixin, viewsets.ModelViewSet, GymPermission):
 
             parent_id = gym.id
             if main:
-                print("Uploading main image")
+                logger.debug("Uploading gym main image gym_id=%s", parent_id)
                 main_uploaded = s3_client.upload(
                     main, FILES_KINDS[GYM_FILES], parent_id, "main")
                 if not main_uploaded:
                     return Response(to_err("Failed to upload main image"))
             if logo:
-                print("Uploading main image")
+                logger.debug("Uploading gym logo image gym_id=%s", parent_id)
                 logo_uploaded = s3_client.upload(
                     logo, FILES_KINDS[GYM_FILES], parent_id, "logo")
                 if not logo_uploaded:
                     return Response(to_err("Failed to upload logo"))
 
-            print("Gym created successfully", gym)
+            logger.info("Gym created successfully gym_id=%s", gym.id)
             return Response(GymSerializer(gym).data)
         except Exception as e:
-            print("Failed to create Gym ", e)
+            logger.exception("Failed to create Gym")
             return Response(to_err(f"Failed to create Gym: {e}", exception=e), status=422)
 
     @action(detail=True, methods=['get'], permission_classes=[])
@@ -78,7 +81,7 @@ class GymViewSet(DestroyWithPayloadMixin, viewsets.ModelViewSet, GymPermission):
             user_id = pk
             return Response(GymFavoritesSerializer(GymFavorites.objects.filter(user_id=user_id), many=True).data)
         except Exception as e:
-            print(e)
+            logger.exception("Failed get user's favorite gyms")
             return Response(to_err("Failed get user's favorite gyms."))
 
     @action(detail=False, methods=['post'], permission_classes=[])
@@ -91,7 +94,7 @@ class GymViewSet(DestroyWithPayloadMixin, viewsets.ModelViewSet, GymPermission):
                 user_id=user_id, gym=Gyms.objects.get(id=gym_id))
             return Response(to_data("Favorited!"))
         except Exception as e:
-            print(e)
+            logger.exception("Failed to favorite gym")
             return Response(to_err("Failed to favorite"))
 
     @action(detail=False, methods=['DELETE'], permission_classes=[])
@@ -110,7 +113,7 @@ class GymViewSet(DestroyWithPayloadMixin, viewsets.ModelViewSet, GymPermission):
             gym = self.queryset.get(id=pk)
             return Response(GymSerializer(gym).data)
         except Exception as e:
-            print(e)
+            logger.exception("Failed to get gym classes")
         return Response({})
 
     @action(detail=True, methods=['PATCH'], permission_classes=[])
@@ -178,20 +181,20 @@ class GymClassViewSet(DestroyWithPayloadMixin, viewsets.ModelViewSet, GymClassPe
 
             parent_id = gym_class.id
             if main:
-                print("Uploading main class image")
+                logger.debug("Uploading gym class main image gym_class_id=%s", parent_id)
                 main_uploaded = s3_client.upload(main, FILES_KINDS[CLASS_FILES], parent_id, "main")
                 if not main_uploaded:
                     return Response(to_err("Failed to upload main class image"))
 
             if logo:
-                print("Uploading logo class image")
+                logger.debug("Uploading gym class logo image gym_class_id=%s", parent_id)
                 logo_uploaded = s3_client.upload(logo, FILES_KINDS[CLASS_FILES], parent_id, "logo")
                 if not logo_uploaded:
                     return Response(to_err("Failed to upload logo class image"))
 
             return Response(GymClassCreateSerializer(gym_class).data)
         except Exception as e:
-            print(e)
+            logger.exception("Failed to create gymclass")
             return Response(to_err(f"Failed to create gymclass: {e}", exception=e), status=422)
 
     @action(detail=True, methods=['get'], permission_classes=[])
@@ -200,7 +203,7 @@ class GymClassViewSet(DestroyWithPayloadMixin, viewsets.ModelViewSet, GymClassPe
             user_id = pk
             return Response(GymClassFavoritesSerializer(GymClassFavorites.objects.filter(user_id=user_id), many=True).data)
         except Exception as e:
-            print(e)
+            logger.exception("Failed get user's favorite gym classes")
             return Response(to_err("Failed get user's favorite gym classes."))
 
     @action(detail=False, methods=['post'], permission_classes=[])
@@ -212,7 +215,7 @@ class GymClassViewSet(DestroyWithPayloadMixin, viewsets.ModelViewSet, GymClassPe
                 user_id=user_id, gym_class=GymClasses.objects.get(id=gym_class_id))
             return Response(to_data("Favorited!"))
         except Exception as e:
-            print(e)
+            logger.exception("Failed to favorite gym class")
             return Response(to_err("Failed to favorite"))
 
     @action(detail=False, methods=['DELETE'], permission_classes=[])
@@ -238,7 +241,7 @@ class GymClassViewSet(DestroyWithPayloadMixin, viewsets.ModelViewSet, GymClassPe
         try:
             gym_class: GymClasses = self.queryset.get(id=pk)
         except Exception as e:
-            print(e)
+            logger.exception("Invalid class")
             return Response(to_err("Invalid class"))
 
         workout_groups = []
@@ -267,7 +270,7 @@ class GymClassViewSet(DestroyWithPayloadMixin, viewsets.ModelViewSet, GymClassPe
 
         user_can_edit = user_is_owner or user_is_coach
 
-        print(f"User can edit {user_can_edit}")
+        logger.debug("Gym class workouts user_can_edit=%s gym_class_id=%s user_id=%s", user_can_edit, pk, request.user.id)
 
         return Response({
             **GymClassSerializerWithWorkoutsCompleted(gym_class, context={'request': request, }).data,

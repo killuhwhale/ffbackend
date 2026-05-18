@@ -1,9 +1,11 @@
 import boto3
 import os
+import logging
 from botocore.exceptions import ClientError
 import environ
 env = environ.Env()
 environ.Env.read_env()
+logger = logging.getLogger(__name__)
 
 
 class s3Client:
@@ -45,9 +47,9 @@ class s3Client:
                     'mykey': "myvalue"
                 }
             )
-            print(response)
+            logger.debug("S3 upload response=%s", response)
         except ClientError as e:
-            print("Client error: ", e)
+            logger.warning("S3 upload client error: %s", e)
             return False
         return True
 
@@ -58,14 +60,14 @@ class s3Client:
         pass
 
     def remove(self, file_kind, parent_id, filename):
-        print("removing filename:", filename)
+        logger.debug("Removing S3 object file_kind=%s parent_id=%s filename=%s", file_kind, parent_id, filename)
         try:
             response = self.s3_client.delete_object(
                 Bucket=self.BUCKET,
                 Key=f'{file_kind}/{parent_id}/{filename}',
             )
-            print(response)
+            logger.debug("S3 delete response=%s", response)
         except ClientError as e:
-            print("Failed removing object", e)
+            logger.warning("Failed removing S3 object: %s", e)
             return False
         return True

@@ -1,3 +1,4 @@
+import logging
 from django.contrib.auth import get_user_model
 from django.utils.translation import gettext_lazy as _
 from rest_framework import HTTP_HEADER_ENCODING, authentication
@@ -6,6 +7,7 @@ from rest_framework_simplejwt.exceptions import AuthenticationFailed, InvalidTok
 from rest_framework_simplejwt.settings import api_settings
 
 AUTH_HEADER_TYPES = api_settings.AUTH_HEADER_TYPES
+logger = logging.getLogger(__name__)
 
 if not isinstance(api_settings.AUTH_HEADER_TYPES, (list, tuple)):
     AUTH_HEADER_TYPES = (AUTH_HEADER_TYPES,)
@@ -27,7 +29,7 @@ class JWTAuthentication(authentication.BaseAuthentication):
         self.user_model = get_user_model()
 
     def authenticate(self, request):
-        print("Authenticating request now!!")
+        logger.debug("Authenticating request")
         header = self.get_header(request)
         if header is None:
             return None
@@ -125,4 +127,3 @@ class JWTAuthentication(authentication.BaseAuthentication):
             raise AuthenticationFailed(_("User is inactive"), code="user_inactive")
 
         return user
-

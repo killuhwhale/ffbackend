@@ -5,8 +5,10 @@ Run with:
   docker compose -f docker-compose_prod.yml exec -T instafitapiprod \
     python manage.py shell < gyms/seed_lat_pulldown.py
 """
+import logging
 from gyms.models import WorkoutNames, WorkoutCategories
 
+logger = logging.getLogger(__name__)
 DEADLIFT_CAT_ID = 2  # "Deadlift" category (rows/pulls)
 
 name = "Lat Pulldown"
@@ -24,8 +26,8 @@ try:
     if created:
         obj.categories.set([DEADLIFT_CAT_ID])
         obj.save()
-        print(f"[OK] Created '{name}' (id={obj.pk})")
+        logger.info("[OK] Created '%s' (id=%s)", name, obj.pk)
     else:
-        print(f"[SKIP] '{name}' already exists (id={obj.pk})")
+        logger.info("[SKIP] '%s' already exists (id=%s)", name, obj.pk)
 except Exception as e:
-    print(f"[ERROR] Failed to create '{name}': {e}")
+    logger.exception("[ERROR] Failed to create '%s'", name)

@@ -17,7 +17,6 @@ from gyms.models import TokenQuota, TokenPurchase
 from gyms.credit_packs import RC_CREDIT_PACKAGES, STRIPE_CREDIT_PACKAGES, SUB_CREDIT_CAP_DEFAULT
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
 User = get_user_model()
 
 # Stripe keys
@@ -56,7 +55,6 @@ def get_user(user_id) -> Union[UserType, None]:
     try:
         user = User.objects.get(id=user_id)
     except Exception as err:
-        print(f"Error getting user via user_id : ", err)
         logger.debug("Error getting user via user_id=%s: %s", user_id, err)
     return user
 
@@ -91,14 +89,14 @@ def move_revenuecat_subscription_state(source_user_ids, destination_user_ids) ->
                 source_quota.delete()
 
             TokenPurchase.objects.filter(user_id=source_user_id).update(user_id=destination_user_id)
-            print(f"[RevenueCat] Transferred subscription state {source_user_id=} -> {destination_user_id=}")
+            logger.info("[RevenueCat] Transferred subscription state source_user_id=%s destination_user_id=%s", source_user_id, destination_user_id)
 
 
 def get_future_datetime(dt: datetime) -> datetime:
     '''Compares the given dt to the current datetime and returns the datetime that is furthest in the future.'''
     current_dt = datetime.now().replace(tzinfo=timezone.utc)
     dt = dt.replace(tzinfo=timezone.utc)
-    print(f"Comparing datetimes {current_dt=} {dt=}")
+    logger.debug("Comparing datetimes current_dt=%s dt=%s", current_dt, dt)
     if dt > current_dt:
         return dt
     return current_dt
@@ -200,7 +198,7 @@ class HookViewSet(viewsets.ViewSet):
                 params["customer_email"] = email
 
             session = stripe.checkout.Session.create(**params)
-            print(f"Created checkout session: {session.id} mode={mode} price={price_id}")
+            logger.info("Created checkout session id=%s mode=%s price=%s", session.id, mode, price_id)
             return JsonResponse({"session_id": session.id, "url": session.url}, status=201)
 
         except stripe.error.StripeError as e:
@@ -246,7 +244,7 @@ class HookViewSet(viewsets.ViewSet):
                 customer=customer_id,
                 return_url=return_url,
             )
-            print(f"Created portal session for customer={customer_id}")
+            logger.info("Created portal session for customer=%s", customer_id)
             return JsonResponse({"url": portal_session.url})
         except stripe.error.StripeError as e:
             logger.error(f"Stripe error creating portal session: {e}")
@@ -295,12 +293,12 @@ class HookViewSet(viewsets.ViewSet):
         # If a user cancels a sub, they will remain subbed until exp-date
         try:
             event = request.data.get("event")
-            print(f"Raw event: {event=}")
+            logger.debug("[RevenueCat] Raw event=%r", event)
 
             if event is None:
                 resp = JsonResponse({})
                 resp.status_code = 500
-                print(f"Could not get data from request: ", request.data)
+                logger.warning("[RevenueCat] Could not get event from request data keys=%s", list(request.data.keys()))
                 return resp
 
             event_type = event.get("type")
@@ -312,30 +310,31 @@ class HookViewSet(viewsets.ViewSet):
             store = event.get("store", "")
             environment = event.get("environment", "")
 
-            print(f"[RevenueCat] {event_type=}, {user_id=}, {app_user_id=}, {product_id=}, {store=}, {environment=}")
-            logger.info(f"[RevenueCat] {event_type=}, {user_id=}, {app_user_id=}")
+            logger.info(
+                "[RevenueCat] event_type=%s user_id=%s app_user_id=%s product_id=%s store=%s environment=%s",
+                event_type, user_id, app_user_id, product_id, store, environment,
+            )
 
             # ── Subscription purchase / renewal ─────────────────────────────
             if event_type in ("INITIAL_PURCHASE", "RENEWAL"):
                 exp_date = event.get("expiration_at_ms")
                 is_trial = event.get("is_trial_conversion", False)
                 period_type = event.get("period_type", "")
-                print(f"[RevenueCat] Sub event: {event_type=}, {period_type=}, {is_trial=}, {product_id=}")
+                logger.info("[RevenueCat] Sub event event_type=%s period_type=%s is_trial=%s product_id=%s", event_type, period_type, is_trial, product_id)
 
                 user = get_user(user_id)
                 if user and exp_date:
-                    print(f"[RevenueCat] User subbed: {user_id=}, {exp_date=}")
+                    logger.info("[RevenueCat] User subbed user_id=%s exp_date=%s", user_id, exp_date)
                     user.sub_end_date = datetime.fromtimestamp(exp_date // 1000, tz=timezone.utc)
                     user.save()
                 elif user and not exp_date:
                     # Sandbox/test purchases may not have an expiration — grant 30 days
-                    print(f"[RevenueCat] User subbed (no exp_date, granting 30d): {user_id=}")
+                    logger.info("[RevenueCat] User subbed with no exp_date, granting 30d user_id=%s", user_id)
                     user.sub_end_date = datetime.now(tz=timezone.utc) + timedelta(days=30)
                     user.save()
                 else:
                     msg = f"[RevenueCat] Error getting user to update sub: {app_user_id=}, {user_id=}, {exp_date=}"
                     logger.warning(msg)
-                    print(msg)
 
                 # Hard-reset subscriber credits to the subscribed tier.
                 # We RESET (not top-off) so that:
@@ -371,7 +370,7 @@ class HookViewSet(viewsets.ViewSet):
                             and TokenPurchase.objects.filter(transaction_ref=transaction_ref).exists()
                         )
                         if already_recorded:
-                            print(f"[RevenueCat] Duplicate sub purchase skipped: {transaction_ref=}")
+                            logger.info("[RevenueCat] Duplicate sub purchase skipped transaction_ref=%s", transaction_ref)
                         else:
                             TokenPurchase.objects.create(
                                 user_id=user_id,
@@ -381,14 +380,11 @@ class HookViewSet(viewsets.ViewSet):
                                 method=method,
                                 transaction_ref=transaction_ref,
                             )
-                            print(f"[RevenueCat] Recorded {event_type} {transaction_ref=} "
-                                  f"@ ${rc_price_usd} for {product_id=}")
+                            logger.info("[RevenueCat] Recorded %s transaction_ref=%s price_usd=%s product_id=%s", event_type, transaction_ref, rc_price_usd, product_id)
 
-                        print(f"[RevenueCat] Reset to {package['credits']} credits "
-                              f"(tier={product_id}) for {user_id=}, remaining={quota.remaining_tokens}")
+                        logger.info("[RevenueCat] Reset to %s credits tier=%s user_id=%s remaining=%s", package['credits'], product_id, user_id, quota.remaining_tokens)
                     else:
-                        print(f"[RevenueCat] Unknown sub product_id={product_id!r} — "
-                              f"applied default top-off, remaining={quota.remaining_tokens}")
+                        logger.warning("[RevenueCat] Unknown sub product_id=%r applied default top-off remaining=%s", product_id, quota.remaining_tokens)
 
             # ── Consumable credit pack ──────────────────────────────────────
             elif event_type == "NON_RENEWING_PURCHASE":
@@ -396,14 +392,14 @@ class HookViewSet(viewsets.ViewSet):
                 method = TokenPurchase.GOOGLE if store == "PLAY_STORE" else TokenPurchase.APPLE
 
                 package = RC_CREDIT_PACKAGES.get(product_id)
-                print(f"[RevenueCat] NON_RENEWING_PURCHASE: {product_id=} {transaction_ref=} {store=} {user_id=}")
+                logger.info("[RevenueCat] NON_RENEWING_PURCHASE product_id=%s transaction_ref=%s store=%s user_id=%s", product_id, transaction_ref, store, user_id)
 
                 if not package:
-                    print(f"[RevenueCat] Unknown credit product_id={product_id!r} — ignoring")
+                    logger.warning("[RevenueCat] Unknown credit product_id=%r ignoring", product_id)
                 elif not user_id:
-                    print(f"[RevenueCat] No user_id in subscriber_attributes for credit purchase {transaction_ref=}")
+                    logger.warning("[RevenueCat] No user_id in subscriber_attributes for credit purchase transaction_ref=%s", transaction_ref)
                 elif transaction_ref and TokenPurchase.objects.filter(transaction_ref=transaction_ref).exists():
-                    print(f"[RevenueCat] Duplicate credit purchase skipped: {transaction_ref=}")
+                    logger.info("[RevenueCat] Duplicate credit purchase skipped transaction_ref=%s", transaction_ref)
                 else:
                     quota, _ = TokenQuota.objects.get_or_create(user_id=user_id)
                     quota.add_tokens(package["tokens"])
@@ -415,27 +411,25 @@ class HookViewSet(viewsets.ViewSet):
                         method=method,
                         transaction_ref=transaction_ref,
                     )
-                    print(f"[RevenueCat] Credited {package['tokens']} tokens ({package['credits']} credits) to user={user_id}")
+                    logger.info("[RevenueCat] Credited %s tokens (%s credits) to user=%s", package['tokens'], package['credits'], user_id)
 
             # ── Cancellation ────────────────────────────────────────────────
             elif event_type == "CANCELLATION":
                 cancel_reason = event.get("cancel_reason", "UNKNOWN")
                 exp_date = event.get("expiration_at_ms")
-                print(f"[RevenueCat] CANCELLATION: {user_id=}, {cancel_reason=}, {exp_date=}, {product_id=}")
-                logger.info(f"[RevenueCat] CANCELLATION: {user_id=}, {cancel_reason=}")
+                logger.info("[RevenueCat] CANCELLATION user_id=%s cancel_reason=%s exp_date=%s product_id=%s", user_id, cancel_reason, exp_date, product_id)
 
                 # Ensure sub_end_date reflects the expiration so access stops at the right time
                 user = get_user(user_id)
                 if user and exp_date:
                     user.sub_end_date = datetime.fromtimestamp(exp_date // 1000, tz=timezone.utc)
                     user.save()
-                    print(f"[RevenueCat] Set sub_end_date to expiration for {user_id=}: {user.sub_end_date}")
+                    logger.info("[RevenueCat] Set sub_end_date to expiration for user_id=%s sub_end_date=%s", user_id, user.sub_end_date)
 
             # ── Uncancellation (user re-enabled auto-renew) ─────────────────
             elif event_type == "UNCANCELLATION":
                 exp_date = event.get("expiration_at_ms")
-                print(f"[RevenueCat] UNCANCELLATION: {user_id=}, {exp_date=}, {product_id=}")
-                logger.info(f"[RevenueCat] UNCANCELLATION: {user_id=}")
+                logger.info("[RevenueCat] UNCANCELLATION user_id=%s exp_date=%s product_id=%s", user_id, exp_date, product_id)
 
                 # User re-enabled auto-renew — restore subscription access and credits.
                 user = get_user(user_id)
@@ -447,11 +441,10 @@ class HookViewSet(viewsets.ViewSet):
 
                     user.sub_end_date = reset_at
                     user.save()
-                    print(f"[RevenueCat] Updated sub_end_date for {user_id=}: {user.sub_end_date}")
+                    logger.info("[RevenueCat] Updated sub_end_date for user_id=%s sub_end_date=%s", user_id, user.sub_end_date)
                 else:
                     msg = f"[RevenueCat] Error getting user to uncancel sub: {app_user_id=}, {user_id=}, {exp_date=}"
                     logger.warning(msg)
-                    print(msg)
 
                 if user_id:
                     package = RC_CREDIT_PACKAGES.get(product_id)
@@ -469,105 +462,92 @@ class HookViewSet(viewsets.ViewSet):
                     quota.save()
 
                     tier = f"{package['credits']} credits" if package else "default"
-                    print(f"[RevenueCat] UNCANCELLATION reset {tier} for {user_id=}, "
-                          f"remaining={quota.remaining_tokens}, reset_at={quota.reset_at}")
+                    logger.info("[RevenueCat] UNCANCELLATION reset tier=%s user_id=%s remaining=%s reset_at=%s", tier, user_id, quota.remaining_tokens, quota.reset_at)
 
             # ── Expiration ──────────────────────────────────────────────────
             elif event_type == "EXPIRATION":
                 expiration_reason = event.get("expiration_reason", "UNKNOWN")
                 exp_date = event.get("expiration_at_ms")
-                print(f"[RevenueCat] EXPIRATION: {user_id=}, {expiration_reason=}, {exp_date=}, {product_id=}")
-                logger.info(f"[RevenueCat] EXPIRATION: {user_id=}, {expiration_reason=}")
+                logger.info("[RevenueCat] EXPIRATION user_id=%s expiration_reason=%s exp_date=%s product_id=%s", user_id, expiration_reason, exp_date, product_id)
 
                 # Sub expired — revoke access and zero out subscription credits
                 user = get_user(user_id)
                 if user:
                     user.sub_end_date = datetime.now(tz=timezone.utc)
                     user.save()
-                    print(f"[RevenueCat] Expired sub for {user_id=}")
+                    logger.info("[RevenueCat] Expired sub for user_id=%s", user_id)
 
                 if user_id:
                     quota, _ = TokenQuota.objects.get_or_create(user_id=user_id)
                     prev = quota.remaining_tokens
                     quota.remaining_tokens = 0
                     quota.save()
-                    print(f"[RevenueCat] Zeroed credits for {user_id=} (was {prev})")
+                    logger.info("[RevenueCat] Zeroed credits for user_id=%s previous=%s", user_id, prev)
 
             # ── Billing issue ───────────────────────────────────────────────
             elif event_type == "BILLING_ISSUE":
                 grace_period_exp = event.get("grace_period_expiration_at_ms")
-                print(f"[RevenueCat] BILLING_ISSUE: {user_id=}, {grace_period_exp=}, {product_id=}")
-                logger.warning(f"[RevenueCat] BILLING_ISSUE: {user_id=}, {grace_period_exp=}")
+                logger.warning("[RevenueCat] BILLING_ISSUE user_id=%s grace_period_exp=%s product_id=%s", user_id, grace_period_exp, product_id)
 
             # ── Product change (upgrade/downgrade) ──────────────────────────
             elif event_type == "PRODUCT_CHANGE":
                 new_product_id = event.get("new_product_id", "")
-                print(f"[RevenueCat] PRODUCT_CHANGE: {user_id=}, {product_id=} -> {new_product_id=}")
-                logger.info(f"[RevenueCat] PRODUCT_CHANGE: {user_id=}, {product_id=} -> {new_product_id=}")
+                logger.info("[RevenueCat] PRODUCT_CHANGE user_id=%s product_id=%s new_product_id=%s", user_id, product_id, new_product_id)
 
             # ── Subscription paused (Android only) ──────────────────────────
             elif event_type == "SUBSCRIPTION_PAUSED":
                 auto_resume_at = event.get("auto_resume_at_ms")
-                print(f"[RevenueCat] SUBSCRIPTION_PAUSED: {user_id=}, {auto_resume_at=}, {product_id=}")
-                logger.info(f"[RevenueCat] SUBSCRIPTION_PAUSED: {user_id=}, {auto_resume_at=}")
+                logger.info("[RevenueCat] SUBSCRIPTION_PAUSED user_id=%s auto_resume_at=%s product_id=%s", user_id, auto_resume_at, product_id)
 
             # ── Subscription extended ───────────────────────────────────────
             elif event_type == "SUBSCRIPTION_EXTENDED":
                 exp_date = event.get("expiration_at_ms")
-                print(f"[RevenueCat] SUBSCRIPTION_EXTENDED: {user_id=}, {exp_date=}, {product_id=}")
-                logger.info(f"[RevenueCat] SUBSCRIPTION_EXTENDED: {user_id=}, {exp_date=}")
+                logger.info("[RevenueCat] SUBSCRIPTION_EXTENDED user_id=%s exp_date=%s product_id=%s", user_id, exp_date, product_id)
 
                 user = get_user(user_id)
                 if user and exp_date:
                     user.sub_end_date = datetime.fromtimestamp(exp_date // 1000, tz=timezone.utc)
                     user.save()
-                    print(f"[RevenueCat] Extended sub for {user_id=}: {user.sub_end_date}")
+                    logger.info("[RevenueCat] Extended sub for user_id=%s sub_end_date=%s", user_id, user.sub_end_date)
 
             # ── Transfer ────────────────────────────────────────────────────
             elif event_type == "TRANSFER":
                 transferred_from = event.get("transferred_from", [])
                 transferred_to = event.get("transferred_to", [])
-                print(f"[RevenueCat] TRANSFER: {transferred_from=} -> {transferred_to=}")
-                logger.info(f"[RevenueCat] TRANSFER: {transferred_from=} -> {transferred_to=}")
+                logger.info("[RevenueCat] TRANSFER transferred_from=%s transferred_to=%s", transferred_from, transferred_to)
                 move_revenuecat_subscription_state(transferred_from, transferred_to)
 
             # ── Refund reversed ─────────────────────────────────────────────
             elif event_type == "REFUND_REVERSED":
-                print(f"[RevenueCat] REFUND_REVERSED: {user_id=}, {product_id=}")
-                logger.info(f"[RevenueCat] REFUND_REVERSED: {user_id=}, {product_id=}")
+                logger.info("[RevenueCat] REFUND_REVERSED user_id=%s product_id=%s", user_id, product_id)
 
             # ── Temporary entitlement grant ─────────────────────────────────
             elif event_type == "TEMPORARY_ENTITLEMENT_GRANT":
                 exp_date = event.get("expiration_at_ms")
                 entitlements = event.get("entitlement_ids", [])
-                print(f"[RevenueCat] TEMPORARY_ENTITLEMENT_GRANT: {user_id=}, {entitlements=}, {exp_date=}")
-                logger.info(f"[RevenueCat] TEMPORARY_ENTITLEMENT_GRANT: {user_id=}, {entitlements=}")
+                logger.info("[RevenueCat] TEMPORARY_ENTITLEMENT_GRANT user_id=%s entitlements=%s exp_date=%s", user_id, entitlements, exp_date)
 
             # ── Invoice issuance ────────────────────────────────────────────
             elif event_type == "INVOICE_ISSUANCE":
-                print(f"[RevenueCat] INVOICE_ISSUANCE: {user_id=}, {product_id=}")
-                logger.info(f"[RevenueCat] INVOICE_ISSUANCE: {user_id=}, {product_id=}")
+                logger.info("[RevenueCat] INVOICE_ISSUANCE user_id=%s product_id=%s", user_id, product_id)
 
             # ── Experiment enrollment ───────────────────────────────────────
             elif event_type == "EXPERIMENT_ENROLLMENT":
                 experiment_id = event.get("experiment_id", "")
                 experiment_variant = event.get("experiment_variant", "")
-                print(f"[RevenueCat] EXPERIMENT_ENROLLMENT: {user_id=}, {experiment_id=}, {experiment_variant=}")
-                logger.info(f"[RevenueCat] EXPERIMENT_ENROLLMENT: {user_id=}, {experiment_id=}, {experiment_variant=}")
+                logger.info("[RevenueCat] EXPERIMENT_ENROLLMENT user_id=%s experiment_id=%s experiment_variant=%s", user_id, experiment_id, experiment_variant)
 
             # ── Test event ──────────────────────────────────────────────────
             elif event_type == "TEST":
-                print(f"[RevenueCat] TEST event received — webhook is working!")
                 logger.info("[RevenueCat] TEST event received")
 
             # ── Unknown / unhandled ─────────────────────────────────────────
             else:
-                print(f"[RevenueCat] Unhandled event type: {event_type=}, full event: {event}")
-                logger.warning(f"[RevenueCat] Unhandled event type: {event_type=}")
+                logger.warning("[RevenueCat] Unhandled event type=%s", event_type)
+                logger.debug("[RevenueCat] Unhandled event=%r", event)
 
         except Exception as err:
-            print(f"[RevenueCat] Error processing webhook: {err=}")
-            logger.error(f"[RevenueCat] Error processing webhook: {err=}")
+            logger.exception("[RevenueCat] Error processing webhook")
 
         return JsonResponse({"success": True})
 
@@ -575,7 +555,7 @@ class HookViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=['POST'], permission_classes=[])
     def webhook(self, request, pk=None):
-        print(f"webhook called...")
+        logger.debug("Stripe webhook called")
         try:
             payload = request.body.decode('utf-8')
             event = None
@@ -588,7 +568,7 @@ class HookViewSet(viewsets.ViewSet):
                         payload, sig_header, endpoint_secret
                     )
                 except stripe.error.SignatureVerificationError as e:
-                    print('⚠️  Webhook signature verification failed.' + str(e))
+                    logger.warning("Webhook signature verification failed: %s", e)
                     return JsonResponse({"success": False}, status=400)
             else:
                 # No signing secret — parse without verification.
@@ -605,7 +585,7 @@ class HookViewSet(viewsets.ViewSet):
 
             event_type = event['type']
             event_data = event['data']['object']
-            print(f"Webhook event type: {event_type}")
+            logger.info("Webhook event type=%s", event_type)
 
             # ── checkout.session.completed ────────────────────────────────────
             if event_type == 'checkout.session.completed':
@@ -618,7 +598,7 @@ class HookViewSet(viewsets.ViewSet):
                     )
                     subscription_id = session.get('subscription')
 
-                    print(f"checkout.session.completed: {customer_id=} {customer_email=} {subscription_id=}")
+                    logger.info("checkout.session.completed customer_id=%s customer_email=%s subscription_id=%s", customer_id, customer_email, subscription_id)
 
                     # Find user by customer_id, then fall back to email
                     user = None
@@ -631,13 +611,13 @@ class HookViewSet(viewsets.ViewSet):
                             pass
 
                     if user is None:
-                        print(f"No user found for completed checkout. {customer_id=} {customer_email=}")
+                        logger.warning("No user found for completed checkout customer_id=%s customer_email=%s", customer_id, customer_email)
                     else:
                         # Always sync customer_id — checkout may use a newer customer
                         if customer_id and user.customer_id != customer_id:
                             user.customer_id = customer_id
                             user.save(update_fields=["customer_id"])
-                            print(f"Updated customer_id={customer_id} for user={user.email}")
+                            logger.info("Updated customer_id=%s for user_id=%s", customer_id, user.id)
 
                         # All plans are subscriptions — set sub_end_date and credit pack if applicable
                         if subscription_id:
@@ -647,7 +627,7 @@ class HookViewSet(viewsets.ViewSet):
                                 if period_end:
                                     user.sub_end_date = unix_to_datetime(period_end)
                                     user.save()
-                                    print(f"Set sub_end_date for user={user.email} until {user.sub_end_date}")
+                                    logger.info("Set sub_end_date for user_id=%s until %s", user.id, user.sub_end_date)
 
                                 price_id = (session.get('metadata') or {}).get('price_id', '')
                                 session_id = session.get('id', '')
@@ -656,7 +636,7 @@ class HookViewSet(viewsets.ViewSet):
 
                                 if credit_pack:
                                     if session_id and TokenPurchase.objects.filter(transaction_ref=session_id).exists():
-                                        print(f"Duplicate Stripe sub purchase skipped: {session_id=}")
+                                        logger.info("Duplicate Stripe sub purchase skipped session_id=%s", session_id)
                                     else:
                                         quota.add_tokens(credit_pack["tokens"])
                                         amount_minor = session.get('amount_total') or 0
@@ -669,20 +649,17 @@ class HookViewSet(viewsets.ViewSet):
                                             method=TokenPurchase.STRIPE,
                                             transaction_ref=session_id,
                                         )
-                                        print(f"Credited {credit_pack['tokens']} tokens "
-                                              f"({credit_pack['credits']} credits) via Stripe sub "
-                                              f"to user={user.email} @ ${price_paid}")
+                                        logger.info("Credited %s tokens (%s credits) via Stripe sub to user_id=%s price_paid=%s", credit_pack['tokens'], credit_pack['credits'], user.id, price_paid)
 
                                 if period_end:
                                     quota.reset_at = unix_to_datetime(period_end)
                                 quota.save()
                                 tier = f"{credit_pack['credits']} credits" if credit_pack else "no-ads"
-                                print(f"Checkout complete: {tier} for user={user.email}, "
-                                      f"remaining={quota.remaining_tokens}")
+                                logger.info("Checkout complete tier=%s user_id=%s remaining=%s", tier, user.id, quota.remaining_tokens)
                             except Exception as sub_err:
-                                print(f"Error retrieving subscription: {sub_err}")
+                                logger.exception("Error retrieving subscription")
                 except Exception as err:
-                    print(f"Error with checkout.session.completed: {err}")
+                    logger.exception("Error with checkout.session.completed")
 
             # ── charge.succeeded ──────────────────────────────────────────────
             elif event_type == 'charge.succeeded':
@@ -690,27 +667,27 @@ class HookViewSet(viewsets.ViewSet):
                     charge = event_data
                     user = get_user_by_customer_id(charge)
                     if not user:
-                        print(f"User not found, user is None.")
+                        logger.warning("User not found for charge.succeeded")
                         return JsonResponse({"success": False})
-                    print('Payment for {} succeeded at amt {}'.format(user, charge['amount']))
-                    print(f"{charge=}")
+                    logger.info("Payment for user_id=%s succeeded amount=%s", user.id, charge['amount'])
+                    logger.debug("Stripe charge=%r", charge)
 
                     if 'duration' in charge['metadata']:
                         days_to_add: int = int(charge['metadata']['duration'])
-                        print(f"Adding {days_to_add} of days to user: {user.email}")
+                        logger.info("Adding subscription days user_id=%s days=%s", user.id, days_to_add)
                         user.sub_end_date = add_days(get_future_datetime(user.sub_end_date), days_to_add)
                         user.save()
                 except Exception as err:
-                    print(f"Error with charge event webhook: ", err)
+                    logger.exception("Error with charge event webhook")
                     return JsonResponse({"success": False})
 
             # ── invoice.paid ──────────────────────────────────────────────────
             elif event_type == 'invoice.paid':
                 invoice = event_data
-                print(f"Invoice event: ", invoice)
+                logger.debug("Invoice event=%r", invoice)
                 user = get_user_by_customer_id(invoice)
                 if not user:
-                    print(f"User not found, user is None.")
+                    logger.warning("User not found for invoice.paid")
                     return JsonResponse({"success": False})
 
                 lines = (invoice.get('lines') or {}).get('data') or []
@@ -729,12 +706,12 @@ class HookViewSet(viewsets.ViewSet):
                     or (first_line.get('price') or {}).get('id', '')
                 )
                 credit_pack = STRIPE_CREDIT_PACKAGES.get(price_id)
-                print(f"[invoice.paid] {billing_reason=} {price_id=} credit_pack={credit_pack is not None}")
+                logger.info("[invoice.paid] billing_reason=%s price_id=%s credit_pack=%s", billing_reason, price_id, credit_pack is not None)
 
                 if credit_pack and billing_reason in ('subscription_create', 'subscription_cycle'):
                     invoice_id = invoice.get('id', '')
                     if invoice_id and TokenPurchase.objects.filter(transaction_ref=invoice_id).exists():
-                        print(f"[invoice.paid] Duplicate skipped: {invoice_id=}")
+                        logger.info("[invoice.paid] Duplicate skipped invoice_id=%s", invoice_id)
                     else:
                         quota, _ = TokenQuota.objects.get_or_create(user_id=str(user.id))
                         if billing_reason == 'subscription_cycle':
@@ -757,8 +734,7 @@ class HookViewSet(viewsets.ViewSet):
                             method=TokenPurchase.STRIPE,
                             transaction_ref=invoice_id,
                         )
-                        print(f"[invoice.paid] {billing_reason}: granted {credit_pack['tokens']} tokens "
-                              f"({credit_pack['credits']} credits) to user={user.email} @ ${price_paid}")
+                        logger.info("[invoice.paid] %s granted %s tokens (%s credits) to user_id=%s price_paid=%s", billing_reason, credit_pack['tokens'], credit_pack['credits'], user.id, price_paid)
 
             # ── invoice.payment_failed ────────────────────────────────────────
             elif event_type == 'invoice.payment_failed':
@@ -768,11 +744,11 @@ class HookViewSet(viewsets.ViewSet):
                     if customer_id:
                         user = get_user_by_customer_id_str(customer_id)
                         if user:
-                            print(f"Payment failed for user={user.email} — no access change yet (grace period)")
+                            logger.info("Payment failed for user_id=%s, no access change yet", user.id)
                             # We don't expire immediately — Stripe will retry
                             # and send customer.subscription.deleted when truly over
                 except Exception as err:
-                    print(f"Error with invoice.payment_failed: {err}")
+                    logger.exception("Error with invoice.payment_failed")
 
             # ── customer.subscription.updated ─────────────────────────────────
             elif event_type == 'customer.subscription.updated':
@@ -781,14 +757,14 @@ class HookViewSet(viewsets.ViewSet):
                     customer_id = subscription.get('customer')
                     period_end = subscription.get('current_period_end')
                     sub_status = subscription.get('status', '')
-                    print(f"Subscription updated: {customer_id=} {sub_status=} period_end={period_end}")
+                    logger.info("Subscription updated customer_id=%s sub_status=%s period_end=%s", customer_id, sub_status, period_end)
 
                     if customer_id:
                         user = get_user_by_customer_id_str(customer_id)
                         if user and period_end:
                             user.sub_end_date = unix_to_datetime(period_end)
                             user.save()
-                            print(f"Updated sub_end_date for user={user.email} until {user.sub_end_date}")
+                            logger.info("Updated sub_end_date for user_id=%s until %s", user.id, user.sub_end_date)
 
                             # Tier-aware top-off: pull the price_id from the
                             # subscription's first line item. Fall back to the
@@ -810,17 +786,16 @@ class HookViewSet(viewsets.ViewSet):
                             quota.reset_at = unix_to_datetime(period_end)
                             quota.save()
                             tier = f"{credit_pack['credits']} credits" if credit_pack else "default"
-                            print(f"Reset {tier} for user={user.email}, "
-                                  f"remaining={quota.remaining_tokens}")
+                            logger.info("Reset tier=%s for user_id=%s remaining=%s", tier, user.id, quota.remaining_tokens)
                 except Exception as err:
-                    print(f"Error with customer.subscription.updated: {err}")
+                    logger.exception("Error with customer.subscription.updated")
 
             # ── customer.subscription.deleted ─────────────────────────────────
             elif event_type == 'customer.subscription.deleted':
                 try:
                     subscription = event_data
                     customer_id = subscription.get('customer')
-                    print(f"Subscription deleted: {customer_id=}")
+                    logger.info("Subscription deleted customer_id=%s", customer_id)
 
                     if customer_id:
                         user = get_user_by_customer_id_str(customer_id)
@@ -828,22 +803,22 @@ class HookViewSet(viewsets.ViewSet):
                             # Expire immediately — subscription is fully cancelled
                             user.sub_end_date = datetime.now(tz=timezone.utc) - timedelta(days=1)
                             user.save()
-                            print(f"Expired subscription for user={user.email}")
+                            logger.info("Expired subscription for user_id=%s", user.id)
 
                             # Zero out subscription credits
                             quota, _ = TokenQuota.objects.get_or_create(user_id=str(user.id))
                             prev = quota.remaining_tokens
                             quota.remaining_tokens = 0
                             quota.save()
-                            print(f"Zeroed credits for user={user.email} (was {prev})")
+                            logger.info("Zeroed credits for user_id=%s previous=%s", user.id, prev)
                 except Exception as err:
-                    print(f"Error with customer.subscription.deleted: {err}")
+                    logger.exception("Error with customer.subscription.deleted")
 
             else:
-                print('Unhandled event type {}'.format(event_type))
+                logger.info("Unhandled event type=%s", event_type)
 
             return JsonResponse({"success": True})
 
         except Exception as err:
-            print(f"Webhook error: ", err)
+            logger.exception("Webhook error")
         return JsonResponse({"success": False})

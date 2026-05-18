@@ -11,6 +11,7 @@ from rest_framework.response import Response
 from typing import Any, Dict, List
 import environ
 import json
+import logging
 import pytz
 
 from gyms.models import (
@@ -20,6 +21,7 @@ from utils import rev_preserve_day
 from gyms.s3 import s3Client
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
 s3_client = s3Client()
 tz = pytz.timezone("US/Pacific")
 env = environ.Env()
@@ -100,7 +102,7 @@ def is_gym_owner(user, gym_id):
         gym = Gyms.objects.get(id=gym_id)
         return str(gym.owner_id) == str(user.id)
     except Exception as e:
-        print("Not gym owner: ", e, f'id: {gym_id}')
+        logger.debug("Not gym owner gym_id=%s error=%s", gym_id, e)
     return False
 
 
@@ -152,7 +154,7 @@ def check_users_workouts_and_completed_today(request):
     # Check for a workoutGroup created today by user. If no workout, return True allow create
     user = request.user
     today = today_UTC(request)
-    print("Checking w/ today:", today)
+    logger.debug("Checking user workout count for today=%s user_id=%s", today, getattr(user, "id", None))
     try:
         workoutGroups = WorkoutGroups.objects.filter(
             owner_id=user.id,
@@ -160,10 +162,10 @@ def check_users_workouts_and_completed_today(request):
             archived=False,
             date__date=today
         )
-        print("Found workoutgroups", workoutGroups)
+        logger.debug("Found workoutgroups count=%d", workoutGroups.count())
         return len(workoutGroups) < NON_MEMBER_LIMIT
     except Exception as e:
-        print("Error check_users_workouts_and_completed_today: ", e)
+        logger.exception("Error check_users_workouts_and_completed_today")
     return False
 
 
@@ -178,7 +180,7 @@ def delete_user_data(user_id, user_email):
     except IntegrityError as ie:
         return False, str(ie)
     except Exception as e:
-        print(f"An error occurred: {e}")
+        logger.exception("Error deleting user data")
         return False, str(e)
 
 

@@ -1,3 +1,4 @@
+import logging
 from rest_framework.permissions import BasePermission, SAFE_METHODS
 from rest_framework.response import Response
 
@@ -16,6 +17,8 @@ from .helpers import (
     to_err,
 )
 
+logger = logging.getLogger(__name__)
+
 
 class GymPermission(BasePermission):
     message = "Only Gym owners can remove their gym"
@@ -29,11 +32,11 @@ class GymPermission(BasePermission):
             return is_member(request)
         elif request.method == "DELETE":
             gym_id = view.kwargs['pk']
-            print("Deleting gym!!!!!!!!!!", gym_id, is_gym_owner(request.user, gym_id))
+            logger.debug("Deleting gym gym_id=%s is_owner=%s", gym_id, is_gym_owner(request.user, gym_id))
 
             from gyms.models import Gyms
             gym = Gyms.objects.get(id=gym_id)
-            print("Gym: ", gym)
+            logger.debug("Gym delete target gym_id=%s", gym.id)
             return is_gym_owner(request.user, gym_id)
         return False
 
@@ -116,7 +119,7 @@ class WorkoutPermission(BasePermission):
     message = """Only users can create/delete workouts for themselves or for a class they own or are a coach of."""
 
     def has_permission(self, request, view):
-        print(f"{request.method=} - {view.action=}")
+        logger.debug("Workout permission method=%s action=%s", request.method, view.action)
         if view.action == "partial_update" or request.method == "PATCH":
             return False
         elif request.method in SAFE_METHODS:
@@ -140,12 +143,19 @@ class WorkoutPermission(BasePermission):
             workout_group = WorkoutGroups.objects.get(id=workout_group_id)
             owned_by_class = workout_group.owned_by_class
 
-            print("Delete workout ", workout_id, owned_by_class,
-                  request.user.id, workout_group.owner_id)
+            logger.debug(
+                "Delete workout workout_id=%s owned_by_class=%s user_id=%s owner_id=%s",
+                workout_id, owned_by_class, request.user.id, workout_group.owner_id,
+            )
             if owned_by_class:
                 gym_class = GymClasses.objects.get(id=workout_group.owner_id)
-                print("Delet class owned workout:", request.user.id, gym_class.gym.id, is_gym_owner(
-                    request.user, gym_class.gym.id), is_gymclass_coach(request.user, gym_class))
+                logger.debug(
+                    "Delete class-owned workout user_id=%s gym_id=%s is_owner=%s is_coach=%s",
+                    request.user.id,
+                    gym_class.gym.id,
+                    is_gym_owner(request.user, gym_class.gym.id),
+                    is_gymclass_coach(request.user, gym_class),
+                )
                 return is_gym_owner(request.user, gym_class.gym.id) or is_gymclass_coach(request.user, gym_class)
             else:
                 return not owned_by_class and str(request.user.id) == str(workout_group.owner_id)
@@ -171,7 +181,7 @@ class WorkoutGroupsPermission(BasePermission):
                 for a class they own or are a coach of."""
 
     def has_permission(self, request, view):
-        print("WorkoutGroup Perm: ", request.method, view.action)
+        logger.debug("WorkoutGroup permission method=%s action=%s", request.method, view.action)
 
         if view.action == "update" or view.action == "partial_update" or request.method == "PATCH":
             return False
@@ -188,15 +198,17 @@ class WorkoutGroupsPermission(BasePermission):
 
             if jbool(request.data.get("owned_by_class")):
                 gym_class = GymClasses.objects.get(id=request.data.get("owner_id"))
-                print("Checking wg perm for class: ", is_gym_owner(
-                    request.user, gym_class.gym.id) or is_gymclass_coach(request.user, gym_class))
+                logger.debug(
+                    "Checking workout group class permission permitted=%s",
+                    is_gym_owner(request.user, gym_class.gym.id) or is_gymclass_coach(request.user, gym_class),
+                )
                 return (is_gym_owner(request.user, gym_class.gym.id) or is_gymclass_coach(request.user, gym_class)) and user_is_member
 
             if user_is_member:
                 return not jbool(request.data.get("owned_by_class")) and \
                     str(request.user.id) == str(request.data.get("owner_id"))
             else:
-                print("User not member checking # workouts created today")
+                logger.debug("User not member, checking daily workout creation limit user_id=%s", request.user.id)
                 return check_users_workouts_and_completed_today(request)
 
         elif request.method == "DELETE":
@@ -240,14 +252,14 @@ class WorkoutItemsPermission(BasePermission):
             return True
         elif request.method == "POST" and (view.action == "items" or view.action == "update_items"):
             workout_id = request.data.get("workout", "0")
-            print("Perm check workoutItems", workout_id)
+            logger.debug("Permission check workout items workout_id=%s", workout_id)
             if not workout_id == "0":
                 workout, workout_group = None, None
                 try:
                     workout = Workouts.objects.get(id=workout_id)
                     workout_group = WorkoutGroups.objects.get(id=workout.group.id)
                 except Exception as e:
-                    print("Error: ", e)
+                    logger.debug("Workout items permission lookup failed: %s", e)
                     return False
                 if not workout or not workout_group:
                     return False
@@ -272,14 +284,14 @@ class WorkoutDualItemsPermission(BasePermission):
             return True
         elif request.method == "POST" and (view.action == "items" or view.action == "update_items" or view.action == "record_items"):
             workout_id = request.data.get("workout", "0")
-            print("Perm check workoutItems", workout_id)
+            logger.debug("Permission check workout dual items workout_id=%s", workout_id)
             if not workout_id == "0":
                 workout, workout_group = None, None
                 try:
                     workout = Workouts.objects.get(id=workout_id)
                     workout_group = WorkoutGroups.objects.get(id=workout.group.id)
                 except Exception as e:
-                    print("Error: ", e)
+                    logger.debug("Workout dual items permission lookup failed: %s", e)
                     return False
                 if not workout or not workout_group:
                     return False
@@ -304,10 +316,10 @@ class CompletedWorkoutGroupsPermission(BasePermission):
             return True
         elif request.method == "POST" and view.action == "create":
             if is_member(request):
-                print("Completed perms: is member")
+                logger.debug("Completed workout group permission allowed for member user_id=%s", request.user.id)
                 return True
             else:
-                print("Completed perms: checking nnon members")
+                logger.debug("Completed workout group permission checking non-member user_id=%s", request.user.id)
                 return check_users_workouts_and_completed_today(request)
         elif request.method == "DELETE":
             comp_workout_group_id = view.kwargs['pk']
@@ -343,7 +355,7 @@ class UserMaxesPermission(BasePermission):
         else:
             target_user_id = str(request.data.get("user_id"))
 
-        print("User self action perm: ", target_user_id, request.user.id)
+        logger.debug("User self action permission target_user_id=%s request_user_id=%s", target_user_id, request.user.id)
         return target_user_id == str(request.user.id)
 
 
@@ -356,11 +368,11 @@ class SelfActionPermission(BasePermission):
 
     def has_permission(self, request, view):
         target_user_id = None
-        print("Usererzzzzz: ", request.data.keys())
+        logger.debug("Self action permission data_keys=%s", list(request.data.keys()))
         if request.method in SAFE_METHODS:
             target_user_id = request.query_params.get("user_id")
         else:
             target_user_id = str(request.data.get("user_id"))
 
-        print("User self action perm: ", target_user_id, request.user.id)
+        logger.debug("Self action permission target_user_id=%s request_user_id=%s", target_user_id, request.user.id)
         return target_user_id == str(request.user.id)

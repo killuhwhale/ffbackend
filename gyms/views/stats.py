@@ -1,5 +1,7 @@
 from datetime import datetime, time
 from itertools import chain
+import copy
+import logging
 from django.http import JsonResponse
 from rest_framework import viewsets
 from rest_framework.decorators import action
@@ -10,7 +12,21 @@ from gyms.serializers import (
     CompletedWorkoutGroupsSerializer,
     WorkoutGroupsSerializer,
 )
+from .ai_helpers import WORKOUT_GENERATION_RULES, base_schema
 from .helpers import today_UTC, tz
+
+logger = logging.getLogger(__name__)
+
+
+def _strip_ai_schema_metadata(value):
+    if isinstance(value, dict):
+        value.pop("default", None)
+        for nested in value.values():
+            _strip_ai_schema_metadata(nested)
+    elif isinstance(value, list):
+        for nested in value:
+            _strip_ai_schema_metadata(nested)
+    return value
 
 
 class StatsViewSet(viewsets.ViewSet):
@@ -42,7 +58,7 @@ class StatsViewSet(viewsets.ViewSet):
             time.max
         )).strftime("%Y-%m-%d %H:%M:%S%z").rstrip("0")
 
-        print('\n', request.query_params, user_id, start, end, '\n',)
+        logger.debug("User workouts stats user_id=%s start=%s end=%s query_params=%s", user_id, start, end, request.query_params)
         wgs = WorkoutGroups.objects.filter(
             owned_by_class=False,
             owner_id=user_id,
@@ -57,8 +73,7 @@ class StatsViewSet(viewsets.ViewSet):
             for_date__lte=end,
         )
 
-        for wg in wgs:
-            print(wg.for_date)
+        logger.debug("User workouts stats created_count=%d completed_count=%d", wgs.count(), cwgs.count())
 
         data['created_workout_groups'] = wgs
         data['completed_workout_groups'] = cwgs
@@ -101,9 +116,7 @@ class SnapshotViewSet(viewsets.ViewSet):
 
         start = datetime.combine(today, time.min).strftime("%Y-%m-%d %H:%M:%S%z")
         end = datetime.combine(today, time.max).strftime("%Y-%m-%d %H:%M:%S%z")
-        print("Daily snapshot date: ", today)
-        print("Daily snapshot Start date: ", start)
-        print("Daily snapshot End date: ", end)
+        logger.debug("Daily snapshot user_id=%s today=%s start=%s end=%s", user_id, today, start, end)
 
         wgs = WorkoutGroups.objects.filter(
             owned_by_class=False,
@@ -113,10 +126,7 @@ class SnapshotViewSet(viewsets.ViewSet):
             for_date__lte=end,
         )
 
-        print('\n', f"Found user daily workouts ({user_id=}):", '\n',)
-        for wg in wgs:
-            print(wg.for_date)
-        print("--END_DAILY_WORKOUT--")
+        logger.debug("Found user daily workouts user_id=%s count=%d", user_id, wgs.count())
 
         data['created_workout_groups'] = wgs
 
@@ -139,4 +149,63 @@ class AppControlViewSet(viewsets.ViewSet):
     def membership_on(self, request, pk=None):
         return JsonResponse({
             'membership_on': False
+        })
+
+    @action(detail=False, methods=['GET'], permission_classes=[])
+    def ai_provider_config(self, request, pk=None):
+        workout_schema = copy.deepcopy(base_schema["parameters"])
+        workout_schema["additionalProperties"] = False
+        workout_schema["required"] = [
+            "goal",
+            "title",
+            "description",
+            "workout_type",
+            "scheme_rounds",
+            "items",
+        ]
+
+        item_schema = workout_schema["properties"]["items"]["items"]
+        item_schema["additionalProperties"] = False
+        item_properties = item_schema.get("properties", {})
+        if "name" in item_properties:
+            item_properties["name"] = {
+                "type": "string",
+                "description": "Exact workout name from the allowed workout names list.",
+            }
+        item_schema["required"] = list(item_properties.keys())
+        workout_schema = _strip_ai_schema_metadata(workout_schema)
+
+        return JsonResponse({
+            "version": 1,
+            "cache_ttl_seconds": 86400,
+            "providers": {
+                "openai": {
+                    "chat_url": "https://api.openai.com/v1/responses",
+                    "workout_url": "https://api.openai.com/v1/responses",
+                    "chat_model": "gpt-5-mini",
+                    "workout_model": "gpt-5-mini",
+                },
+                "anthropic": {
+                    "chat_url": "https://api.anthropic.com/v1/messages",
+                    "workout_url": "https://api.anthropic.com/v1/messages",
+                    "chat_model": "claude-sonnet-4-20250514",
+                    "workout_model": "claude-sonnet-4-20250514",
+                    "anthropic_version": "2023-06-01",
+                },
+                "gemini": {
+                    "chat_url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+                    "workout_url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+                    "chat_model": "gemini-2.5-flash",
+                    "workout_model": "gemini-2.5-flash",
+                },
+            },
+            "workout": {
+                "tool_name": base_schema["name"],
+                "tool_description": base_schema.get("description", "Generate workout items."),
+                "response_schema": workout_schema,
+                "system_rules": WORKOUT_GENERATION_RULES,
+                "max_tokens": {
+                    "anthropic": 4096,
+                },
+            },
         })

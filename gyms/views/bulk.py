@@ -1,4 +1,5 @@
 import json
+import logging
 from datetime import datetime
 from django.db import transaction
 from django.utils import timezone
@@ -8,6 +9,8 @@ from rest_framework.response import Response
 
 from .helpers import cur_template_num, next_template_num, to_err
 from .permissions import SelfActionPermission
+
+logger = logging.getLogger(__name__)
 
 
 def _parse_for_date(value):
@@ -64,7 +67,7 @@ class BulkTemplateViewSet(viewsets.ViewSet):
                 w.delete()
             return Response({"data": "Successfully removed un-done/finished templates"})
         except Exception as err:
-            print("Failed to reset template: ", request.data, err)
+            logger.exception("Failed to reset template")
         return Response({"err": "Failed to reset template"})
 
     @action(detail=False, methods=['POST'], permission_classes=[SelfActionPermission])
@@ -143,7 +146,7 @@ class BulkTemplateViewSet(viewsets.ViewSet):
                         )
 
         except Exception as e:
-            print("Error in bulk create_template: ", e)
+            logger.exception("Error in bulk create_template")
             return Response(
                 to_err(f"Failed to create template: {e}", exception=e),
                 status=status.HTTP_422_UNPROCESSABLE_ENTITY,

@@ -1,3 +1,4 @@
+import logging
 from django.db.models import Max
 from django.contrib.postgres.search import TrigramWordSimilarity
 from django.db.models.functions import Greatest
@@ -30,12 +31,14 @@ from .helpers import (
 )
 from .permissions import SelfActionPermission, SuperUserWritePermission
 
+logger = logging.getLogger(__name__)
+
 
 class ProfileViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=['GET'], permission_classes=[])
     def profile(self, request, pk=None):
-        print(request.user)
+        logger.debug("Profile requested user_id=%s", getattr(request.user, "id", None))
         user_id = request.user.id
         profile_data = dict()
         profile_data['user'] = request.user
@@ -64,7 +67,7 @@ class ProfileViewSet(viewsets.ViewSet):
         query = request.query_params.get("query")
         user_id = request.query_params.get("user_id")
 
-        print(f"Userid : {user_id} WG Query: {query}")
+        logger.debug("Workout group query user_id=%s query=%r", user_id, query)
 
         results = (
             WorkoutGroups.objects
@@ -86,7 +89,7 @@ class ProfileViewSet(viewsets.ViewSet):
         user_id = request.user.id
         template_name = request.query_params.get('template_name')
         template_num = cur_template_num(request.user, template_name)
-        print("Getting template groups for num: ", template_num)
+        logger.debug("Getting template groups user_id=%s template_name=%s template_num=%s", user_id, template_name, template_num)
         wgs = WorkoutGroups.objects.filter(
             owner_id=user_id,
             owned_by_class=False,
@@ -188,7 +191,7 @@ class WorkoutMaxViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['POST'])
     def update_max(self, request):
         """Update a user's max for a workout item and record in history"""
-        print("Update_max: ", request.data.keys(), )
+        logger.debug("Update max request user_id=%s data_keys=%s", request.user.id, list(request.data.keys()))
         workout_name_id = request.data.get('workout_name_id')
 
         max_value = request.data.get('max_value')
@@ -196,7 +199,7 @@ class WorkoutMaxViewSet(viewsets.ModelViewSet):
         notes = request.data.get('notes', '')
 
         if not workout_name_id or max_value is None:
-            print("{'error': 'workout_name_id and max_value are required'},")
+            logger.debug("Update max rejected missing workout_name_id or max_value")
             return Response(
                 {'error': 'workout_name_id and max_value are required'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -205,7 +208,7 @@ class WorkoutMaxViewSet(viewsets.ModelViewSet):
         try:
             max_value = float(max_value)
         except ValueError:
-            print("{'error': 'max_value must be a number'},")
+            logger.debug("Update max rejected non-numeric max_value")
             return Response(
                 {'error': 'max_value must be a number'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -214,7 +217,7 @@ class WorkoutMaxViewSet(viewsets.ModelViewSet):
         try:
             workout_name = WorkoutNames.objects.get(id=workout_name_id)
         except WorkoutItems.DoesNotExist:
-            print("{'error': 'Workout item not found'} id: ", workout_name_id)
+            logger.debug("Update max workout item not found workout_name_id=%s", workout_name_id)
             return Response(
                 {'error': 'Workout item not found'},
                 status=status.HTTP_404_NOT_FOUND
@@ -244,7 +247,7 @@ class WorkoutMaxViewSet(viewsets.ModelViewSet):
             'current_max': UserWorkoutMaxSerializer(current_max).data,
             'history_record': UserWorkoutMaxHistorySerializer(history_record).data
         }
-        print("Update_max res: ", res)
+        logger.debug("Update max completed user_id=%s workout_name_id=%s", request.user.id, workout_name_id)
 
         return Response(res)
 
@@ -294,13 +297,12 @@ class RemoveAccount(viewsets.ViewSet):
             User = get_user_model()
             email = request.data['email']
             user = User.objects.get(email=email)
-            print("Attempting to remove account and data associated with user: ", user)
-            print("Need to think about how to remove an account.... Delete their gyms and classes? Mark them as archived? just dont show on search. Remove all workouts and completed workouts, favorites, coach and members")
+            logger.info("Attempting to remove account and data associated with user_id=%s", user.id)
             deleted, err = delete_user_data(user.id, user.email)
             if deleted:
                 return Response({"success": True, "error": ""})
             return Response({"success": False, "error": err})
 
         except Exception as e:
-            print(f"Failed to remove account: ", e)
+            logger.exception("Failed to remove account")
             return Response({"success": False, "error": str(e)})

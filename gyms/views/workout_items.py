@@ -1,4 +1,5 @@
 import json
+import logging
 from django.db import transaction
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
@@ -29,6 +30,8 @@ from .permissions import (
     WorkoutDualItemsPermission,
     WorkoutItemsPermission,
 )
+
+logger = logging.getLogger(__name__)
 
 
 # // Not used
@@ -93,18 +96,18 @@ class WorkoutItemsViewSet(viewsets.ModelViewSet, WorkoutItemsPermission):
     def update_items(self, request, pk=None):
         try:
             workout_id = request.data.get("workout", 0)
-            print("Updating items fpr workout ID: ", workout_id)
+            logger.debug("Updating workout items workout_id=%s", workout_id)
             with transaction.atomic():
                 WorkoutItems.objects.filter(workout__id=workout_id).delete()
                 return self.create_items(request)
 
         except Exception as e:
-            print("Error update_items: ", e)
+            logger.exception("Error update_items")
             return Response(to_err("Failed to update items"))
 
     def create_items(self, request):
         try:
-            print("Creating workout items: ", request.data)
+            logger.debug("Creating workout items data_keys=%s", list(request.data.keys()))
             workout_items = json.loads(request.data.get("items", '[]'))
             workout_id = request.data.get("workout", 0)
             workout = Workouts.objects.get(id=workout_id)
@@ -120,8 +123,7 @@ class WorkoutItemsViewSet(viewsets.ModelViewSet, WorkoutItemsPermission):
             if not workout:
                 return Response(to_data("Workout not found"))
 
-            print('Items', workout_items)
-            print('Workout ID:', workout_id)
+            logger.debug("Workout items payload_count=%d workout_id=%s", len(workout_items), workout_id)
 
             items = []
             for w in workout_items:
@@ -130,7 +132,7 @@ class WorkoutItemsViewSet(viewsets.ModelViewSet, WorkoutItemsPermission):
                     del w['workout']
                 except Exception as err:
                     pass
-                print(f"{w=}")
+                logger.debug("Workout item payload=%s", w)
                 items.append(WorkoutItems(
                     **{**w, "workout": Workouts(id=workout_id), "name": WorkoutNames(id=w['name']['id'])}))
             created_workout_items = WorkoutItems.objects.bulk_create(items)
@@ -139,11 +141,11 @@ class WorkoutItemsViewSet(viewsets.ModelViewSet, WorkoutItemsPermission):
             wStats.tags = tags
             wStats.items = names
             wStats.save()
-            print("Created stats: ", wStats)
+            logger.debug("Created/updated workout stats workout_stats_id=%s", wStats.id)
 
             return Response(WorkoutItemSerializer(created_workout_items, many=True).data)
         except Exception as e:
-            print("create_items err: ", e)
+            logger.exception("create_items failed")
             return Response(to_err("Failed to insert"), e)
 
     @action(detail=False, methods=['post'], permission_classes=[WorkoutItemsPermission])
@@ -170,7 +172,7 @@ class WorkoutDualItemsViewSet(viewsets.ModelViewSet, WorkoutItemsPermission):
 
     def createDualItems(self, request):
         try:
-            print("Creating workout Dual Items: ", request.data)
+            logger.debug("Creating workout dual items data_keys=%s", list(request.data.keys()))
             workout_items = json.loads(request.data.get("items", '[]'))
             workout_id = request.data.get("workout", 0)
             workout = Workouts.objects.get(id=workout_id)
@@ -186,8 +188,7 @@ class WorkoutDualItemsViewSet(viewsets.ModelViewSet, WorkoutItemsPermission):
             if not workout:
                 return Response(to_err("Workout not found"))
 
-            print('Dual Items', workout_items)
-            print('Workout ID for DualItems:', workout_id)
+            logger.debug("Workout dual items payload_count=%d workout_id=%s", len(workout_items), workout_id)
 
             items = []
             for w in workout_items:
@@ -200,11 +201,11 @@ class WorkoutDualItemsViewSet(viewsets.ModelViewSet, WorkoutItemsPermission):
             wStats.tags = tags
             wStats.items = names
             wStats.save()
-            print("Created stats: ", wStats)
+            logger.debug("Created/updated workout stats workout_stats_id=%s", wStats.id)
 
             return Response(WorkoutDualItemSerializer(WorkoutDualItems.objects.bulk_create(items), many=True).data)
         except Exception as e:
-            print(e)
+            logger.exception("createDualItems failed")
             return Response(to_err("Failed to insert"))
 
     @action(detail=False, methods=['post'], permission_classes=[WorkoutDualItemsPermission])
@@ -226,7 +227,7 @@ class WorkoutDualItemsViewSet(viewsets.ModelViewSet, WorkoutItemsPermission):
     def record_items(self, request, pk=None):
         '''Updates items once the workout is completed.'''
         try:
-            print("Updating workout Dual Items: ", request.data)
+            logger.debug("Recording workout dual items data_keys=%s", list(request.data.keys()))
             workout_items = json.loads(request.data.get("items", '[]'))
             workout_id = request.data.get("workout", 0)
             workout = Workouts.objects.get(id=workout_id)
@@ -234,8 +235,7 @@ class WorkoutDualItemsViewSet(viewsets.ModelViewSet, WorkoutItemsPermission):
             if not workout:
                 return Response(to_err("Workout not found"))
 
-            print('Dual Items', workout_items)
-            print('Workout ID for DualItems:', workout_id)
+            logger.debug("Recording workout dual items payload_count=%d workout_id=%s", len(workout_items), workout_id)
 
             items = []
             for w in workout_items:
@@ -247,7 +247,7 @@ class WorkoutDualItemsViewSet(viewsets.ModelViewSet, WorkoutItemsPermission):
 
             return Response(WorkoutDualItemSerializer(items, many=True).data)
         except Exception as e:
-            print("Error updating dual items: ", e)
+            logger.exception("Error updating dual items")
             raise e
 
     def get_serializer_class(self):
@@ -313,15 +313,13 @@ class WorkoutNamesViewSet(viewsets.ModelViewSet, SuperUserWritePermission):
 
         last_id = self.last_id_from_media(cur_media_ids)
 
-        print("Last id: ", last_id)
+        logger.debug("Adding workout name media workout_id=%s last_id=%s", workout_id, last_id)
         uploaded_names = upload_media(
             files, workout.id, FILES_KINDS[NAME_FILES], start=last_id + 1)
-        print("Num uploaded: ", uploaded_names)
-
-        print("Cur media ids: ", cur_media_ids)
+        logger.debug("Uploaded workout name media names=%s", uploaded_names)
         cur_media_ids.extend(uploaded_names)
 
-        print("Updated Cur media ids: ", cur_media_ids)
+        logger.debug("Updated workout name media ids=%s", cur_media_ids)
         workout.media_ids = json.dumps(cur_media_ids)
         workout.save()
         return Response(to_data("Successfully added media to workout"))
@@ -338,12 +336,12 @@ class WorkoutNamesViewSet(viewsets.ModelViewSet, SuperUserWritePermission):
 
             cur_media_ids = list(
                 filter(lambda n: not str(n) in deleted_ids, cur_media_ids))
-            print("Filtered Current media ids: ", cur_media_ids)
+            logger.debug("Filtered workout name media ids=%s", cur_media_ids)
             workout.media_ids = json.dumps(cur_media_ids)
             workout.save()
             return Response(to_data("Deleted"))
         except Exception as e:
-            print(e)
+            logger.exception("Failed to remove workout name media")
             return Response(to_err("Failed to remove media"))
 
 

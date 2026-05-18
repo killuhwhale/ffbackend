@@ -1,4 +1,5 @@
 import json
+import logging
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -27,6 +28,8 @@ from .permissions import (
     CompletedWorkoutsPermission,
     EditWorkoutMediaPermission,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class CompletedWorkoutGroupsViewSet(DestroyWithPayloadMixin, viewsets.ModelViewSet):
@@ -119,7 +122,7 @@ class CompletedWorkoutGroupsViewSet(DestroyWithPayloadMixin, viewsets.ModelViewS
                 return Response(to_err("Workout already create. Must delete and reupload w/ media or edit workout."))
 
         except Exception as e:
-            print("Error creating CompletedWorkoutGroup:", e)
+            logger.exception("Error creating CompletedWorkoutGroup")
             if comp_workout_group:
                 comp_workout_group.delete()
             return Response(to_err("Failed to create CompletedWorkoutGroup", e), status=422)
@@ -132,7 +135,7 @@ class CompletedWorkoutGroupsViewSet(DestroyWithPayloadMixin, viewsets.ModelViewS
             allDualItems = []
             for w in workouts:
                 _w = {**w}
-                print("Workout to add as completed", w)
+                logger.debug("Workout to add as completed workout_id=%s", _w.get("id"))
                 workout_items = _w['workout_items']
                 workout_id = _w['id']
                 del _w['id']
@@ -148,10 +151,10 @@ class CompletedWorkoutGroupsViewSet(DestroyWithPayloadMixin, viewsets.ModelViewS
                 })
 
                 if _w["scheme_type"] <= 2:
-                    print("Attempt create items")
+                    logger.debug("Attempt create completed workout items completed_workout_id=%s", completed_workout.id)
                     allItems.extend(self.create_items(request, workout_items, completed_workout.id))
                 else:
-                    print("Attempt create dual items")
+                    logger.debug("Attempt create completed workout dual items completed_workout_id=%s", completed_workout.id)
                     allDualItems.extend(self.record_dualitems(request, workout_items, completed_workout.id))
 
             CompletedWorkoutItems.objects.bulk_create(allItems)
@@ -160,7 +163,7 @@ class CompletedWorkoutGroupsViewSet(DestroyWithPayloadMixin, viewsets.ModelViewS
         except Exception as e:
             comp_workout_group.delete()
             msg = f"Error creating CompleteWorkoutItems {e}"
-            print(msg, e)
+            logger.exception("Error creating CompleteWorkoutItems")
             return Response(to_err(msg))
 
         return Response(CompletedWorkoutGroupsSerializer(comp_workout_group).data)
@@ -184,15 +187,13 @@ class CompletedWorkoutGroupsViewSet(DestroyWithPayloadMixin, viewsets.ModelViewS
 
         last_id = self.last_id_from_media(cur_media_ids)
 
-        print("Last id: ", last_id)
+        logger.debug("Adding completed workout media workout_group_id=%s last_id=%s", workout_group_id, last_id)
         uploaded_names = upload_media(
             files, workout_group.id, FILES_KINDS[COMP_WORKOUT_FILES], start=last_id + 1)
-        print("Num uploaded: ", uploaded_names)
-
-        print("Cur media ids: ", cur_media_ids)
+        logger.debug("Uploaded completed workout media names=%s", uploaded_names)
         cur_media_ids.extend(uploaded_names)
 
-        print("Updated Cur media ids: ", cur_media_ids)
+        logger.debug("Updated completed workout media ids=%s", cur_media_ids)
         workout_group.media_ids = json.dumps(cur_media_ids)
         workout_group.save()
         return Response(to_data("Successfully added media to workout"))
@@ -209,12 +210,12 @@ class CompletedWorkoutGroupsViewSet(DestroyWithPayloadMixin, viewsets.ModelViewS
 
             cur_media_ids = list(
                 filter(lambda n: not str(n) in deleted_ids, cur_media_ids))
-            print("Filtered Current media ids: ", cur_media_ids)
+            logger.debug("Filtered completed workout media ids=%s", cur_media_ids)
             workout_group.media_ids = json.dumps(cur_media_ids)
             workout_group.save()
             return Response(to_data("Deleted"))
         except Exception as e:
-            print(e)
+            logger.exception("Failed to remove completed workout media")
             return Response(to_err("Failed to remove media"))
 
     @action(detail=False, methods=['get'], permission_classes=[])
@@ -225,7 +226,7 @@ class CompletedWorkoutGroupsViewSet(DestroyWithPayloadMixin, viewsets.ModelViewS
                 owner_id=owner_id)
             return Response(CompletedWorkoutGroupsSerializer(workout_groups).data)
         except Exception as e:
-            print(e)
+            logger.exception("Failed get user's workouts")
             return Response(to_err("Failed get user's workouts."))
 
     @action(detail=True, methods=['get'], permission_classes=[])
@@ -234,7 +235,7 @@ class CompletedWorkoutGroupsViewSet(DestroyWithPayloadMixin, viewsets.ModelViewS
             workout_groups: CompletedWorkoutGroups = CompletedWorkoutGroups.objects.get(id=pk)
             return Response(CompletedWorkoutGroupsSerializer(workout_groups).data)
         except Exception as e:
-            print(e)
+            logger.exception("Failed get user's completed_workout_group")
             return Response(to_err("Failed get user's completed_workout_group."))
 
     @action(detail=True, methods=['get'], permission_classes=[])
@@ -247,7 +248,7 @@ class CompletedWorkoutGroupsViewSet(DestroyWithPayloadMixin, viewsets.ModelViewS
         complete_workout_group = None if len(
             complete_workout_groups) == 0 else complete_workout_groups[0]
 
-        print("completed_workout_group_by_og_workout_group")
+        logger.debug("completed_workout_group_by_og_workout_group user_id=%s workout_group_id=%s", request.user.id, og_workout_group_id)
         return Response(CompletedWorkoutGroupsSerializer(complete_workout_group).data)
 
     def update(self, request, *args, **kwargs):

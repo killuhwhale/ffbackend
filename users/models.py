@@ -19,10 +19,9 @@ from instafitAPI.settings import BASE_URL, env
 from utils import get_env
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.ERROR)
 
 stripe_key = get_env("STRIPE_API_KEY")
-logger.critical(f"{stripe_key=}")
+logger.debug("Stripe API key configured=%s", bool(stripe_key))
 stripe.api_key = stripe_key
 
 
@@ -33,12 +32,12 @@ configuration.api_key['api-key'] = env('SENDINBLUE_KEY')
 class UserManager(BaseUserManager):
     use_in_migrations = True
     TESTING = get_env("RUN_ENV") == "dev"
-    logger.debug(f"UserManager {TESTING=}")
+    logger.debug("UserManager testing=%s", TESTING)
 
     def send_confirmation_email(self, email):
         ''' After register is called, this should be called,'''
         if self.TESTING:
-            logger.critical(f"{self.TESTING=} returning and not sending confirmation email.")
+            logger.debug("Skipping confirmation email in testing mode")
             return True
         try:
             code = pyotp.TOTP(pyotp.random_base32()).now()  # Just create a code
@@ -54,12 +53,11 @@ class UserManager(BaseUserManager):
                 params={'confirmURL': url},
             )
             api_response = api_instance.send_transac_email(send_smtp_email)
-            logger.critical("Confirmation email sent!")
+            logger.info("Confirmation email sent")
             return True
 
         except Exception as error:
-            logger.critical(f"Error sending confirmation email: {error}")
-            traceback.print_exc()
+            logger.exception("Error sending confirmation email")
             return False
 
     def _create_stripe_customer(self, email):
@@ -69,7 +67,7 @@ class UserManager(BaseUserManager):
             )
             return customer.id
         except Exception as err:
-            logger.critical(f"Error creating customer id: {err=}")
+            logger.exception("Error creating customer id")
             return None
 
     def _create_user(self, email, password, **extra_fields):
@@ -104,13 +102,11 @@ class UserManager(BaseUserManager):
             self.send_confirmation_email(email)
             return user
         except Exception as err:
-            logger.error(f"Error creating user: ", err)
+            logger.exception("Error creating user")
             return None
 
     def create_user(self, email, password=None, **extra_fields):
-        logger.debug("Creating user!")
-
-        print("Creating user!!!")
+        logger.debug("Creating user")
         extra_fields.setdefault('is_staff', False)
         extra_fields.setdefault('is_superuser', False)
         return self._create_user(email, password, **extra_fields)
@@ -155,5 +151,4 @@ def create_auth_token(sender, instance=None, created=False, **kwargs):
 class ConfirmationEmailCodes(models.Model):
     email = models.CharField(max_length=50, unique=True)
     code = models.CharField(max_length=1000)
-
 

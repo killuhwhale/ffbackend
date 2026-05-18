@@ -38,7 +38,6 @@ configuration = sib_api_v3_sdk.Configuration()
 configuration.api_key['api-key'] = env('SENDINBLUE_KEY')
 import logging
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.ERROR)
 User = get_user_model()
 
 class UserGroupsPermission(BasePermission):
@@ -86,12 +85,12 @@ class UserViewSet(viewsets.ModelViewSet):
             user_id = request.user.id
             user = get_user_model().objects.get(id=user_id)
             username = request.data.get("username", user.username)
-            print("New username: ", username)
+            logger.debug("Updating username for user_id=%s", user_id)
             user.username = username
             user.save()
             return Response(UserSerializer(user).data)
         except Exception as e:
-            print("Update username error: ", e)
+            logger.exception("Update username failed")
         return Response({'error': 'Unable to update username'})
 
     @action(detail=False, methods=['get'], permission_classes=[permissions.IsAuthenticated])
@@ -136,11 +135,11 @@ class UserViewSet(viewsets.ModelViewSet):
                 return Response(s3_client.upload(file, FILES_KINDS[4], user_id, "profile_image"))
             return Response("Failed uploading image, no file given.")
         except Exception as e:
-            print("User profile image upload: ", e)
+            logger.exception("User profile image upload failed")
             return Response("Error uploading user profile image")
 
     def get_serializer_class(self):
-        print("User serializer: ", self.action)
+        logger.debug("Selecting user serializer for action=%s", self.action)
         if self.action == 'list' or self.action == 'retrieve':
             return UserWithoutEmailSerializer
         elif self.action == "create":
@@ -190,7 +189,7 @@ class ConfirmEmailViewSet(viewsets.ViewSet):
         try:
             code = request.query_params.get('code')
             email = request.query_params.get('email')
-            logger.critical(f"{code=} {email=}")
+            logger.debug("Confirm email request received for email=%s", email)
 
             confirm_obj = ConfirmationEmailCodes.objects.get(email=email, code=code)
             user = get_user_model().objects.get(email=email)
@@ -199,7 +198,7 @@ class ConfirmEmailViewSet(viewsets.ViewSet):
             confirm_obj.delete()
             return HttpResponse(self._html_code("Verified successfully!"))
         except Exception as error:
-            logger.critical(f"{error=}")
+            logger.warning("Confirm email failed: %s", error)
             return HttpResponse(self._html_code("Failed to verify..."))
 
 
@@ -214,11 +213,10 @@ class ResetPasswordEmailViewSet(viewsets.ViewSet):
 
     def _get_user(self, email: str):
         try:
-            emails = [ user.email for user in get_user_model().objects.all() ]
-            print("debug emails: " ,email, emails[::-1])
+            logger.debug("Looking up reset-password user for email=%s", email)
             return get_user_model().objects.get(email=email)
         except Exception as e:
-            print("Error getting user or creating code.", e)
+            logger.debug("Reset-password user lookup failed for email=%s: %s", email, e)
             return None
 
     def _check_expired_entry(self, email: str):
@@ -231,7 +229,6 @@ class ResetPasswordEmailViewSet(viewsets.ViewSet):
 
         for entry in entries:
             # Time for expiration is greater than now, its in future.
-            # print("Date cmp", entry.expires_at,  now, entry.expires_at >= now)
             if entry.expires_at >= now:
                 has_existing_code = True
             else:
@@ -260,21 +257,21 @@ class ResetPasswordEmailViewSet(viewsets.ViewSet):
                 expires_at= tz.localize(datetime.fromtimestamp(int(time()) + (self.CODE_VALID_TIME)))
             )
         except IntegrityError as e:
-            print("Error user already exists.", e)
+            logger.debug("Reset-password code already exists for user_id=%s: %s", user.id, e)
             return {'error': 'Code already exsits.'}
         except Exception as e:
-            print("Error getting user or creating code.", e)
+            logger.exception("Error creating reset-password code")
             return {'error': 'Server Failed!.'}
 
         try:
             # Send a transactional email
             api_response = api_instance.send_transac_email(send_smtp_email)
-            print(api_response)
+            logger.debug("Reset-password email API response: %s", api_response)
         except ApiException as e:
             # If Failed to send Email, delete entry on our side.
             if not new_entry is None:
                 new_entry.delete()
-            print("Exception when calling TransactionalEmailsApi->send_transac_email: %s\n" % e)
+            logger.warning("Exception when calling TransactionalEmailsApi->send_transac_email: %s", e)
             return {'error': 'Email API Failed!.'}
         return {'data': "Email Sent!"}
 
@@ -282,7 +279,7 @@ class ResetPasswordEmailViewSet(viewsets.ViewSet):
     def send_reset_code(self, request, pk=None):
         '''  '''
         email = request.data.get("email") or request.data.get("resetEmail")
-        print("send_reset_code request.data: ", request.data)
+        logger.debug("Reset-password code requested for email=%s", email)
         user = self._get_user(email)
 
         if user is None:
@@ -290,7 +287,7 @@ class ResetPasswordEmailViewSet(viewsets.ViewSet):
 
         has_existing_code = self._check_expired_entry(email)
         if has_existing_code:
-            print("User has code already")
+            logger.debug("Reset-password code already exists for email=%s", email)
             return Response({'error': 'You already have an existing code. Please enter the code on the Submit Code page; or wait 15 mins.'})
 
         return Response(self._send_email(user))
@@ -302,7 +299,6 @@ class ResetPasswordEmailViewSet(viewsets.ViewSet):
         email = request.data.get("email")
         user_code = request.data.get("reset_code")
         new_password = request.data.get("new_password")
-        # print("Resetting pass", email, user_code, new_password)
 
         fifteen_mins_ago = tz.localize(
             datetime.fromtimestamp(
@@ -325,7 +321,7 @@ class ResetPasswordEmailViewSet(viewsets.ViewSet):
                 return Response({'data': "Password reset."})
 
         except Exception as e:
-            print("Error resetting password", e)
+            logger.warning("Error resetting password for email=%s: %s", email, e)
             # TODO,
 
         return Response({'error': 'Failed to reset password.'})
@@ -335,21 +331,26 @@ class ResetPasswordEmailViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['POST'], permission_classes=[])
     def reset_password_with_old(self, request, pk=None):
         email = request.user.email
-        print("reset_password_with_old", request.data)
         password = request.data.get("password")
         new_password = request.data.get("new_password")
         password_confirm = request.data.get("password_confirm")
         try:
             user = get_user_model().objects.get(email=email)
-            print('Password check: ', password, user.password, new_password, password_confirm, check_password(password, user.password),
-                  new_password == password_confirm)
-            if check_password(password, user.password) and new_password == password_confirm and new_password:
+            password_matches = check_password(password, user.password)
+            passwords_match = new_password == password_confirm
+            logger.debug(
+                "Password change requested for user_id=%s password_matches=%s passwords_match=%s",
+                user.id,
+                password_matches,
+                passwords_match,
+            )
+            if password_matches and passwords_match and new_password:
                 user.set_password(new_password)
                 user.save()
                 return Response({'data': 'Changed password'})
             return Response({'error': 'Invalid password'}, status=403)
         except Exception as e:
-            print("Error", e)
+            logger.exception("Reset password with old password failed")
             return Response({'error': ''}, status=501)
 
 
@@ -381,7 +382,6 @@ def ping(request):
 
 #     def post(self, request, *args, **kwargs):
 #         logger.debug("🔥 Token endpoint hit, payload=", request.data)
-#         print("🔥 Token endpoint hit, payload= ", request.data['email'])
 
 #         # serializer = self.get_serializer(data=request.data)
 #         serializer = MyTokenObtainPairSerializer(data=request.data)
@@ -396,5 +396,4 @@ def ping(request):
 
 #         # if you get here, it succeeded
 #         logger.debug("✅ TokenObtainPair succeeded for user %r", serializer.user)
-#         print("✅ TokenObtainPair succeeded for user %r", serializer.user)
 #         return Response(serializer.validated_data, status=status.HTTP_200_OK)

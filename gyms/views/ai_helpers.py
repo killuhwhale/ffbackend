@@ -1,5 +1,6 @@
 import copy
 import json
+import logging
 from pathlib import Path
 import anthropic
 import tiktoken
@@ -7,6 +8,8 @@ from openai import OpenAI
 import google.generativeai as genai
 
 from instafitAPI import settings
+
+logger = logging.getLogger(__name__)
 
 # Load workout generation philosophy once at import time
 _gen_rules_path = Path(__file__).resolve().parent.parent / "system_workout_generation_rules.md"
@@ -164,7 +167,7 @@ def generate_workout_with_gemini(base_schema, max_tokens, prompt, scheme_type_te
     try:
         workout_data = json.loads(response.text)
     except json.JSONDecodeError as e:
-        print("Error parsing Gemini JSON:", e)
+        logger.warning("Error parsing Gemini JSON: %s", e)
         workout_data = {}
 
     return {

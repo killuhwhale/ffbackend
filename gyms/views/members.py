@@ -1,3 +1,4 @@
+import logging
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -16,6 +17,7 @@ from gyms.serializers import (
 from .helpers import to_data, to_err
 from .permissions import CoachPermission, MemberPermission
 
+logger = logging.getLogger(__name__)
 User = get_user_model()
 
 
@@ -31,7 +33,7 @@ class CoachesViewSet(viewsets.ModelViewSet, CoachPermission):
         '''Gets all coaches for a class. '''
         coaches: List[Coaches] = Coaches.objects.filter(gym_class__id=pk)
         ids = [c.user_id for c in coaches]
-        print("Coach ids: ", ids)
+        logger.debug("Coach ids for gym_class_id=%s ids=%s", pk, ids)
 
         users = User.objects.filter(id__in=ids)
         return Response(UserWithoutEmailSerializer(users, many=True).data)
@@ -46,7 +48,7 @@ class CoachesViewSet(viewsets.ModelViewSet, CoachPermission):
             coach.delete()
             return Response(to_data(CoachesSerializer(coach).data))
         except Exception as e:
-            print(e)
+            logger.exception("Failed to remove coach")
 
         return Response(to_err("Failed to remove coach"))
 
@@ -81,7 +83,7 @@ class ClassMembersViewSet(viewsets.ModelViewSet, MemberPermission):
         '''Gets all members for a class. '''
         members: List[ClassMembers] = ClassMembers.objects.filter(gym_class__id=pk)
         ids = [c.user_id for c in members]
-        print("Coach ids: ", ids)
+        logger.debug("Member ids for gym_class_id=%s ids=%s", pk, ids)
 
         users = User.objects.filter(id__in=ids)
         return Response(UserWithoutEmailSerializer(users, many=True).data)
@@ -95,7 +97,7 @@ class ClassMembersViewSet(viewsets.ModelViewSet, MemberPermission):
                 user_id=remove_user_id, gym_class__id=gym_class_id)
             class_member.delete()
         except Exception as e:
-            print(e)
+            logger.exception("Failed to remove class member")
             return Response(to_err("Failed to remove class member"))
 
         return Response(to_data("Deleted"))

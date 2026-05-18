@@ -1,21 +1,23 @@
 import json
+import logging
 from django.dispatch import receiver
 from .s3 import s3Client
 from django.db.models.signals import post_delete
 from gyms.models import Gyms, GymClasses, WorkoutGroups, WorkoutNames, CompletedWorkoutGroups
 from gyms.views import delete_media
 s3_client = s3Client()
+logger = logging.getLogger(__name__)
 
 
 @receiver(post_delete, sender=Gyms)
 def delete_media_from_gym(sender, **kwargs):
-    print("Post delete received!", sender, kwargs)
+    logger.debug("Post delete received sender=%s kwargs=%s", sender, kwargs)
     try:
         instance = kwargs['instance']
         return [s3_client.remove("gyms", instance.id, 'main'),
                 s3_client.remove("gyms", instance.id, 'logo')]
     except Exception as e:
-        print("Error removing gym media", e)
+        logger.exception("Error removing gym media")
     return False
 
 
@@ -26,7 +28,7 @@ def delete_media_from_gym_class(sender, **kwargs):
         return [s3_client.remove("classes", instance.id, 'main'),
                 s3_client.remove("classes", instance.id, 'logo')]
     except Exception as e:
-        print("Error removing gym_class media", e)
+        logger.exception("Error removing gym_class media")
     return False
 
 
@@ -49,6 +51,5 @@ def delete_media_from_gym_class(sender, **kwargs):
 #             instance.media_ids), file_kind)
 #         return len(removed.keys()) > 0
 
-#     except Exception as e:
-#         print("Error removing gym_class media", e)
+#     except Exception:
 #     return False

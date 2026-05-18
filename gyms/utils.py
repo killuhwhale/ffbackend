@@ -1,6 +1,8 @@
 import datetime
+import logging
 import pytz
 tz = pytz.timezone("US/Pacific")
+logger = logging.getLogger(__name__)
 
 
 def tz_aware_today():
@@ -13,6 +15,5 @@ def tz_aware_date(yr: int, m: int, d: int):
 if __name__ == "__main__":
     a = tz_aware_date(2023, 2, 5)
     b = tz_aware_today()
-    print(a)
-    print(b)
-
+    logger.info("%s", a)
+    logger.info("%s", b)
